@@ -39,11 +39,29 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 import time
 import os
+import csv
+import random
 import argparse
 
-# ── Reproducibility ─────────────────────────────────────────
-torch.manual_seed(42)
-np.random.seed(42)
+# ── Reproducibility / multi-seed configuration ───────────────
+# Each antenna experiment is trained once PER SEED so that test
+# accuracy can be reported as mean ± std across independent runs.
+# With only ~2,160 samples, a single seed's test accuracy has
+# several percentage points of noise; averaging tightens the
+# confidence interval enough to support claims about the best
+# antenna count.
+#
+# Override with --seeds 0,1,2 from the command line.
+SEEDS = [0, 1, 2, 3, 4]
+
+
+def set_seed(seed):
+    """Seed torch, numpy and random for one training run."""
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 # ── Device ──────────────────────────────────────────────────
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -69,7 +87,7 @@ ANTENNA_EXPERIMENTS = [
 #  SECTION 1: LOAD DATASET
 # ============================================================
 
-def load_dataset(filepath, batch_size=128):
+def load_dataset(filepath, batch_size=256):
     """
     Load one MATLAB dataset file and return DataLoaders.
 
@@ -150,9 +168,9 @@ def load_dataset(filepath, batch_size=128):
                           batch_size=batch_size,
                           shuffle=True, drop_last=True)
     val_dl   = DataLoader(TensorDataset(X_vl, Y_vl),
-                          batch_size=batch_size, shuffle=False)
+                          batch_size=512, shuffle=False)
     test_dl  = DataLoader(TensorDataset(X_te, Y_te),
-                          batch_size=batch_size, shuffle=False)
+                          batch_size=512, shuffle=False)
 
     meta = {
         'n_ant'   : n_ant,
@@ -257,14 +275,21 @@ def train_model(model, train_dl, val_dl, n_ant,
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(),
                            lr=lr, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=3
+    # Cosine annealing — deterministic LR decay over n_epochs.
+    # Replaces ReduceLROnPlateau, which reacted to noisy val loss
+    # and introduced its own instability.
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=n_epochs, eta_min=1e-6
     )
 
     history = {
-        'train_loss': [], 'val_loss': [],
-        'train_acc' : [], 'val_acc' : [],
+        'train_loss'  : [], 'val_loss'    : [],
+        'train_acc'   : [], 'val_acc'     : [],
+        'val_loss_ema': [], 'val_acc_ema' : [],
     }
+    ema_val_loss = None
+    ema_val_acc  = None
+    EMA_ALPHA    = 0.3          # 0 = fully smoothed, 1 = no smoothing
 
     best_val   = float('inf')
     best_wts   = None
@@ -319,21 +344,34 @@ def train_model(model, train_dl, val_dl, n_ant,
         va_loss /= va_n
         va_acc   = va_corr / va_n
 
-        scheduler.step(va_loss)
+        # -- EMA smoothing of val metrics --
+        # Damps per-epoch noise so training curves and early stopping
+        # react to trends, not to single-batch spikes.
+        if ema_val_loss is None:
+            ema_val_loss = va_loss
+            ema_val_acc  = va_acc
+        else:
+            ema_val_loss = EMA_ALPHA * va_loss + (1 - EMA_ALPHA) * ema_val_loss
+            ema_val_acc  = EMA_ALPHA * va_acc  + (1 - EMA_ALPHA) * ema_val_acc
+
+        scheduler.step()
         cur_lr = optimizer.param_groups[0]['lr']
 
         history['train_loss'].append(tr_loss)
         history['val_loss'].append(va_loss)
         history['train_acc'].append(tr_acc)
         history['val_acc'].append(va_acc)
+        history['val_loss_ema'].append(ema_val_loss)
+        history['val_acc_ema'].append(ema_val_acc)
 
         print(f"{ep:>4} | {tr_loss:>8.4f} | {va_loss:>8.4f} | "
               f"{tr_acc*100:>6.1f}% | {va_acc*100:>6.1f}% | "
-              f"{cur_lr:>9.6f}  ({time.time()-t0:.1f}s)")
+              f"{cur_lr:>9.6f}  ({time.time()-t0:.1f}s)  "
+              f"EMA_VaLoss={ema_val_loss:.4f}")
 
-        # -- Early stopping --
-        if va_loss < best_val:
-            best_val   = va_loss
+        # -- Early stopping (on smoothed val loss, not raw) --
+        if ema_val_loss < best_val:
+            best_val   = ema_val_loss
             best_wts   = {k: v.clone()
                           for k, v in model.state_dict().items()}
             no_improve = 0
@@ -421,8 +459,19 @@ def plot_history(history, n_ant):
 
     eps = range(1, len(history['train_loss']) + 1)
 
-    ax1.plot(eps, history['train_loss'], 'b-o', ms=3, label='Train')
-    ax1.plot(eps, history['val_loss'],   'r-o', ms=3, label='Val')
+    # Raw val curves in faded background; EMA curves in foreground.
+    # Fall back to raw if EMA keys aren't in the history dict
+    # (e.g. when loading legacy runs saved before EMA was added).
+    has_ema = 'val_loss_ema' in history and len(history['val_loss_ema']) > 0
+
+    ax1.plot(eps, history['train_loss'], 'b-o', ms=3, label='Train', alpha=0.85)
+    if has_ema:
+        ax1.plot(eps, history['val_loss'],     'r-',  lw=1, alpha=0.3,
+                 label='Val (raw)')
+        ax1.plot(eps, history['val_loss_ema'], 'r-o', ms=3,
+                 label='Val (EMA)')
+    else:
+        ax1.plot(eps, history['val_loss'], 'r-o', ms=3, label='Val')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Loss')
     ax1.set_title('Loss')
@@ -430,9 +479,15 @@ def plot_history(history, n_ant):
     ax1.grid(True, alpha=0.3)
 
     ax2.plot(eps, [a*100 for a in history['train_acc']],
-             'b-o', ms=3, label='Train')
-    ax2.plot(eps, [a*100 for a in history['val_acc']],
-             'r-o', ms=3, label='Val')
+             'b-o', ms=3, label='Train', alpha=0.85)
+    if has_ema:
+        ax2.plot(eps, [a*100 for a in history['val_acc']],
+                 'r-', lw=1, alpha=0.3, label='Val (raw)')
+        ax2.plot(eps, [a*100 for a in history['val_acc_ema']],
+                 'r-o', ms=3, label='Val (EMA)')
+    else:
+        ax2.plot(eps, [a*100 for a in history['val_acc']],
+                 'r-o', ms=3, label='Val')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Accuracy (%)')
     ax2.set_title('Accuracy')
@@ -458,14 +513,18 @@ def plot_history(history, n_ant):
 
 def plot_antenna_comparison(results):
     """
-    Plot accuracy vs antenna count for all experiments.
+    Plot accuracy vs antenna count with per-seed scatter and
+    mean ± std error bars.
 
     Args:
-        results : list of dicts, each containing:
-                  n_ant, accuracy, per_class_acc, history
+        results : list of dicts from run_antenna_experiments.
+                  Each dict carries 'mean_acc', 'std_acc',
+                  'accuracies' (per seed), 'per_class_mean',
+                  'per_class_std', and 'seeds'.
     """
     n_ants     = [r['n_ant']    for r in results]
-    accuracies = [r['accuracy'] for r in results]
+    means      = [r['mean_acc'] for r in results]
+    stds       = [r['std_acc']  for r in results]
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     fig.suptitle(
@@ -475,23 +534,39 @@ def plot_antenna_comparison(results):
 
     # -- Left: overall accuracy vs antenna count --
     ax = axes[0]
-    ax.plot(n_ants, [a*100 for a in accuracies],
-            'bo-', linewidth=2.5, markersize=10,
-            markerfacecolor='white', markeredgewidth=2.5)
 
-    for n, acc in zip(n_ants, accuracies):
+    # Faded scatter of each seed's test accuracy
+    for r in results:
+        ax.scatter(
+            [r['n_ant']] * len(r['accuracies']),
+            [a*100 for a in r['accuracies']],
+            color='#3498DB', alpha=0.35, s=30, zorder=2
+        )
+
+    # Mean with ±1 std error bars
+    ax.errorbar(
+        n_ants, [m*100 for m in means], yerr=[s*100 for s in stds],
+        fmt='o-', linewidth=2.5, markersize=10,
+        markerfacecolor='white', markeredgewidth=2.5,
+        color='#2C3E50', ecolor='#2C3E50', capsize=5, zorder=3,
+        label='Mean ± 1 std'
+    )
+
+    for n, m, s in zip(n_ants, means, stds):
         ax.annotate(
-            f'{acc*100:.1f}%',
-            xy=(n, acc*100),
-            xytext=(0, 12),
+            f'{m*100:.1f}±{s*100:.1f}%',
+            xy=(n, m*100),
+            xytext=(0, 14),
             textcoords='offset points',
-            ha='center', fontsize=11,
+            ha='center', fontsize=10,
             fontweight='bold', color='#2C3E50'
         )
 
+    n_seeds_label = len(results[0]['seeds']) if results else 0
     ax.set_xlabel('Number of RX Antennas', fontsize=12)
     ax.set_ylabel('Test Accuracy (%)',      fontsize=12)
-    ax.set_title('Overall Accuracy vs Antenna Count',
+    ax.set_title(f'Overall Accuracy vs Antenna Count '
+                 f'({n_seeds_label} seeds)',
                  fontsize=12, fontweight='bold')
     ax.set_xticks(n_ants)
     ax.set_ylim([40, 108])
@@ -499,7 +574,7 @@ def plot_antenna_comparison(results):
     ax.axhline(100 / N_CLASSES, color='red',
                linestyle='--', alpha=0.5, linewidth=1.5,
                label=f'Chance ({100/N_CLASSES:.0f}%)')
-    ax.legend(fontsize=10)
+    ax.legend(fontsize=10, loc='lower right')
 
     # Secondary x-axis showing angular resolution
     ax_top = ax.twiny()
@@ -512,23 +587,27 @@ def plot_antenna_comparison(results):
     ax_top.set_xlabel('Angular Resolution',
                        fontsize=10, color='gray')
 
-    # -- Right: per-class accuracy grouped bar chart --
+    # -- Right: per-class accuracy grouped bar chart with error bars --
     ax     = axes[1]
     x      = np.arange(N_CLASSES)
-    w      = 0.18
+    w      = 0.8 / max(len(results), 1)
     n_exp  = len(results)
     offsets = np.linspace(-(n_exp-1)*w/2, (n_exp-1)*w/2, n_exp)
-    bar_colors = ['#3498DB', '#2ECC71', '#E74C3C', '#9B59B6']
+    bar_colors = ['#3498DB', '#2ECC71', '#E74C3C', '#9B59B6',
+                  '#F39C12', '#1ABC9C', '#8E44AD']
 
     for idx, (res, offset) in enumerate(zip(results, offsets)):
-        pc = res['per_class_acc']
+        pc_mean = res['per_class_mean']
+        pc_std  = res['per_class_std']
         ax.bar(
             x + offset,
-            [pc.get(name, 0)*100 for name in CLASS_NAMES],
+            [pc_mean.get(name, 0)*100 for name in CLASS_NAMES],
+            yerr=[pc_std.get(name, 0)*100 for name in CLASS_NAMES],
             width=w,
             color=bar_colors[idx % len(bar_colors)],
             alpha=0.85,
-            label=f"N={res['n_ant']}"
+            label=f"N={res['n_ant']}",
+            ecolor='black', capsize=3, error_kw={'lw': 1.0}
         )
 
     ax.set_xlabel('Shape Class', fontsize=12)
@@ -538,7 +617,7 @@ def plot_antenna_comparison(results):
     ax.set_xticks(x)
     ax.set_xticklabels(CLASS_NAMES, fontsize=10)
     ax.set_ylim([0, 115])
-    ax.legend(fontsize=10, loc='lower right')
+    ax.legend(fontsize=9, loc='lower right', ncol=2)
     ax.grid(axis='y', alpha=0.3)
     ax.axhline(100, color='gray', linestyle='--',
                alpha=0.4, linewidth=1)
@@ -550,16 +629,19 @@ def plot_antenna_comparison(results):
     print("Saved: accuracy_vs_antennas.png")
 
     # Summary table
-    print(f"\n{'='*52}")
-    print(f"  ANTENNA EXPERIMENT SUMMARY")
-    print(f"{'='*52}")
-    print(f"  {'N_ant':>6} | {'Resolution':>12} | {'Accuracy':>10}")
-    print(f"  {'-'*38}")
+    print(f"\n{'='*70}")
+    print(f"  ANTENNA EXPERIMENT SUMMARY (mean ± std across seeds)")
+    print(f"{'='*70}")
+    print(f"  {'N_ant':>6} | {'Resolution':>12} | {'Mean Acc':>10} | "
+          f"{'Std':>6} | {'Best':>7}")
+    print(f"  {'-'*62}")
     for r in results:
         res_deg = 114.6 / r['n_ant']
         print(f"  {r['n_ant']:>6} | {res_deg:>9.1f} deg | "
-              f"{r['accuracy']*100:>9.1f}%")
-    print(f"{'='*52}\n")
+              f"{r['mean_acc']*100:>9.2f}% | "
+              f"{r['std_acc']*100:>5.2f}% | "
+              f"{r['best_accuracy']*100:>6.2f}%")
+    print(f"{'='*70}\n")
 
 
 # ============================================================
@@ -726,25 +808,36 @@ def per_class_accuracy(preds, labels):
 #  SECTION 10: RUN ALL ANTENNA EXPERIMENTS
 # ============================================================
 
-def run_antenna_experiments(experiments):
+def run_antenna_experiments(experiments, seeds=None):
     """
-    Train and evaluate one model per antenna dataset.
+    Train and evaluate one model per antenna dataset, repeated
+    once per seed.
 
-    For each experiment:
-      1. Load dataset from .mat file
-      2. Initialise a fresh ShapeCNN  <-- critical: new model each time
-      3. Train with early stopping
-      4. Plot training curves
+    For each (experiment, seed):
+      1. Load dataset from .mat file (re-loaded each seed so the
+         DataLoader shuffle also varies)
+      2. Set global RNG seed
+      3. Initialise a fresh ShapeCNN (new weights each seed)
+      4. Train with early stopping
       5. Evaluate on test set
-      6. Save trained model as radar_shape_model_N{N}.pt
-      7. Store result for comparison plot
+      6. Keep the best model of the N_ant (used for inference demo)
+
+    After all seeds finish for a given N_ant:
+      * Save the best model as radar_shape_model_N{N}.pt
+      * Plot training curves overlaid across seeds
+      * Plot confusion matrix from the best seed
+      * Aggregate per-seed accuracies into mean ± std
 
     Args:
         experiments : list of dicts with 'n_ant' and 'file' keys
+        seeds       : list of int seeds; defaults to module-level SEEDS
 
     Returns:
-        results : list of result dicts
+        results : list of result dicts (one per N_ant)
     """
+    if seeds is None:
+        seeds = SEEDS
+
     results = []
 
     for exp in experiments:
@@ -752,94 +845,269 @@ def run_antenna_experiments(experiments):
         filepath = exp['file']
 
         print(f"\n{'#'*62}")
-        print(f"#  EXPERIMENT: N_ant = {n_ant}")
+        print(f"#  EXPERIMENT: N_ant = {n_ant}  |  seeds = {seeds}")
         print(f"#  File      : {filepath}")
         print(f"{'#'*62}")
 
-        # Skip gracefully if file does not exist
         if not os.path.exists(filepath):
             print(f"  SKIPPED: {filepath} not found.")
-            print(f"  Run radar_shape_simple.m with N_ant={n_ant} first.")
+            print(f"  Run the MATLAB data generator with N_ant={n_ant} first.")
             continue
 
-        # Step 1: Load data
-        train_dl, val_dl, test_dl, meta = load_dataset(filepath)
+        # Per-seed accumulators for this N_ant
+        seed_accs       = []
+        seed_histories  = []
+        seed_per_class  = {name: [] for name in CLASS_NAMES}
+        best_acc        = -1.0
+        best_seed       = None
+        best_model      = None
+        best_preds      = None
+        best_labels     = None
+        meta            = None
 
-        # Step 2: Fresh model — weights reset for every experiment
-        model  = ShapeCNN(n_classes=N_CLASSES)
-        params = sum(p.numel() for p in model.parameters())
-        print(f"\n  ShapeCNN initialised — {params:,} parameters")
+        for seed in seeds:
+            print(f"\n  ---- seed {seed} ----")
+            set_seed(seed)
 
-        # Step 3: Train
-        model, history = train_model(
-            model, train_dl, val_dl,
-            n_ant    = n_ant,
-            n_epochs = 60,
-            lr       = 3e-4,
-            patience = 10,
-        )
+            # Reload per seed so DataLoader shuffle also varies
+            train_dl, val_dl, test_dl, meta = load_dataset(filepath)
 
-        # Step 4: Training curves
-        plot_history(history, n_ant)
+            model  = ShapeCNN(n_classes=N_CLASSES)
+            params = sum(p.numel() for p in model.parameters())
+            if seed == seeds[0]:
+                print(f"  ShapeCNN — {params:,} parameters")
 
-        # Step 5: Evaluate
-        acc, preds, labels = evaluate_model(model, test_dl, n_ant)
-        pc_acc = per_class_accuracy(preds, labels)
+            model, history = train_model(
+                model, train_dl, val_dl,
+                n_ant    = n_ant,
+                n_epochs = 60,
+                lr       = 3e-4,
+                patience = 10,
+            )
 
-        # Step 6: Save
-        save_model(model, n_ant, acc)
+            acc, preds, labels = evaluate_model(model, test_dl, n_ant)
+            pc = per_class_accuracy(preds, labels)
 
-        # Step 7: Store result
+            seed_accs.append(acc)
+            seed_histories.append(history)
+            for name in CLASS_NAMES:
+                seed_per_class[name].append(pc.get(name, 0.0))
+
+            if acc > best_acc:
+                best_acc    = acc
+                best_seed   = seed
+                best_model  = model
+                best_preds  = preds
+                best_labels = labels
+
+            print(f"  seed={seed}  |  acc={acc*100:.2f}%")
+
+        # Aggregate across seeds
+        mean_acc = float(np.mean(seed_accs))
+        std_acc  = float(np.std(seed_accs, ddof=1)) if len(seed_accs) > 1 else 0.0
+        pc_mean  = {n: float(np.mean(v))          for n, v in seed_per_class.items()}
+        pc_std   = {n: float(np.std(v, ddof=1))
+                    if len(v) > 1 else 0.0
+                    for n, v in seed_per_class.items()}
+
+        # Save best model + best-seed confusion matrix + history overlay
+        save_model(best_model, n_ant, best_acc)
+        plot_history_multi(seed_histories, n_ant, seeds)
+        plot_confusion_from_preds(best_preds, best_labels, n_ant,
+                                   best_acc, best_seed)
+
         results.append({
-            'n_ant'         : n_ant,
-            'accuracy'      : acc,
-            'per_class_acc' : pc_acc,
-            'history'       : history,
-            'model'         : model,
-            'meta'          : meta,
+            'n_ant'          : n_ant,
+            'seeds'          : list(seeds),
+            'accuracies'     : seed_accs,
+            'mean_acc'       : mean_acc,
+            'std_acc'        : std_acc,
+            'per_class_accs' : seed_per_class,
+            'per_class_mean' : pc_mean,
+            'per_class_std'  : pc_std,
+            'histories'      : seed_histories,
+            'best_model'     : best_model,
+            'best_seed'      : best_seed,
+            'best_accuracy'  : best_acc,
+            # Back-compat keys used elsewhere
+            'accuracy'       : mean_acc,
+            'per_class_acc'  : pc_mean,
+            'meta'           : meta,
         })
 
-        print(f"\n  N_ant={n_ant} done  |  accuracy: {acc*100:.1f}%")
+        print(f"\n  N_ant={n_ant} done  |  "
+              f"mean acc = {mean_acc*100:.2f}% ± {std_acc*100:.2f}%  "
+              f"(best seed {best_seed}: {best_acc*100:.2f}%)")
 
     return results
+
+
+# ============================================================
+#  SECTION 10a: AGGREGATION HELPERS
+# ============================================================
+
+def plot_history_multi(histories, n_ant, seeds):
+    """
+    Overlay training curves from several seeds for one N_ant.
+    Each seed is drawn faded; a mean curve is drawn solid on top.
+    EMA val curves are used when available.
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    fig.suptitle(f'Training History (seeds={seeds})  |  N_ant={n_ant}',
+                 fontsize=13, fontweight='bold')
+
+    # Align lengths because early stopping can cut runs short
+    min_len = min(len(h['train_loss']) for h in histories)
+    eps     = range(1, min_len + 1)
+
+    def stack(key):
+        return np.stack([np.array(h[key][:min_len]) for h in histories])
+
+    has_ema = all('val_loss_ema' in h and len(h['val_loss_ema']) > 0
+                  for h in histories)
+
+    tr_loss = stack('train_loss')
+    va_loss = stack('val_loss_ema' if has_ema else 'val_loss')
+    tr_acc  = stack('train_acc')  * 100
+    va_acc  = stack('val_acc_ema' if has_ema else 'val_acc') * 100
+
+    for i, h in enumerate(histories):
+        ax1.plot(eps, h['train_loss'][:min_len],       'b-', lw=1, alpha=0.25)
+        ax1.plot(eps, (h.get('val_loss_ema') or h['val_loss'])[:min_len],
+                                                       'r-', lw=1, alpha=0.25)
+        ax2.plot(eps, [a*100 for a in h['train_acc'][:min_len]],
+                                                       'b-', lw=1, alpha=0.25)
+        ax2.plot(eps, [a*100 for a in (h.get('val_acc_ema') or h['val_acc'])[:min_len]],
+                                                       'r-', lw=1, alpha=0.25)
+
+    ax1.plot(eps, tr_loss.mean(0), 'b-', lw=2, label='Train (mean)')
+    ax1.plot(eps, va_loss.mean(0), 'r-', lw=2,
+             label='Val (EMA mean)' if has_ema else 'Val (mean)')
+    ax1.set_xlabel('Epoch'); ax1.set_ylabel('Loss')
+    ax1.set_title('Loss'); ax1.legend(); ax1.grid(True, alpha=0.3)
+
+    ax2.plot(eps, tr_acc.mean(0), 'b-', lw=2, label='Train (mean)')
+    ax2.plot(eps, va_acc.mean(0), 'r-', lw=2,
+             label='Val (EMA mean)' if has_ema else 'Val (mean)')
+    ax2.set_xlabel('Epoch'); ax2.set_ylabel('Accuracy (%)')
+    ax2.set_title('Accuracy'); ax2.legend(); ax2.grid(True, alpha=0.3)
+    ax2.set_ylim([0, 105])
+
+    plt.tight_layout()
+    fname = f'history_N{n_ant}.png'
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.show()
+    print(f"  Saved: {fname}")
+
+
+def plot_confusion_from_preds(preds, labels, n_ant, acc, seed):
+    """Plot a confusion matrix given already-computed preds/labels."""
+    cm      = confusion_matrix(labels, preds)
+    cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig.suptitle(
+        f'Confusion Matrix  |  N_ant={n_ant}  |  '
+        f'seed={seed}  |  Accuracy={acc*100:.1f}%',
+        fontsize=13, fontweight='bold'
+    )
+
+    for ax, data, fmt, title in zip(
+        axes, [cm, cm_norm], ['d', '.1%'], ['Counts', 'Normalised']
+    ):
+        sns.heatmap(data, annot=True, fmt=fmt, cmap='Blues',
+                    xticklabels=CLASS_NAMES, yticklabels=CLASS_NAMES,
+                    ax=ax, linewidths=0.5, square=True)
+        ax.set_xlabel('Predicted'); ax.set_ylabel('True')
+        ax.set_title(title)
+
+    plt.tight_layout()
+    fname = f'confusion_N{n_ant}.png'
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.show()
+    print(f"  Saved: {fname}")
+
+
+def save_results_csv(results, filepath='results_per_seed.csv'):
+    """Dump per-seed results to CSV for the writeup."""
+    rows = []
+    for r in results:
+        for seed, acc in zip(r['seeds'], r['accuracies']):
+            row = {'n_ant': r['n_ant'], 'seed': seed,
+                   'test_accuracy': acc}
+            for name in CLASS_NAMES:
+                idx = r['seeds'].index(seed)
+                row[f'acc_{name}'] = r['per_class_accs'][name][idx]
+            rows.append(row)
+
+    if not rows:
+        return
+
+    fieldnames = list(rows[0].keys())
+    with open(filepath, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Saved per-seed results: {filepath}")
 
 
 # ============================================================
 #  SECTION 11: SINGLE FILE MODE
 # ============================================================
 
-def run_single(filepath):
-    """Train on one file when --single flag is passed."""
+def run_single(filepath, seeds=None):
+    """
+    Train on one .mat file across several seeds.
+    Reuses run_antenna_experiments so the seed loop, aggregation,
+    CSV dump and history-overlay plot stay identical to the sweep mode.
+    """
+    if seeds is None:
+        seeds = SEEDS
 
-    print(f"\nSingle-file mode: {filepath}")
-    train_dl, val_dl, test_dl, meta = load_dataset(filepath)
+    print(f"\nSingle-file mode: {filepath}  |  seeds = {seeds}")
 
-    model  = ShapeCNN(n_classes=N_CLASSES)
-    params = sum(p.numel() for p in model.parameters())
-    print(f"ShapeCNN — {params:,} parameters")
+    # Peek once to recover N_ant for labelling
+    _, _, _, meta = load_dataset(filepath)
+    n_ant = meta['n_ant']
 
-    model, history = train_model(
-        model, train_dl, val_dl,
-        n_ant    = meta['n_ant'],
-        n_epochs = 60,
-        lr       = 3e-4,
-        patience = 10,
+    results = run_antenna_experiments(
+        [{'n_ant': n_ant, 'file': filepath}],
+        seeds=seeds,
     )
 
-    plot_history(history, meta['n_ant'])
-    acc, preds, labels = evaluate_model(model, test_dl, meta['n_ant'])
-    save_model(model, meta['n_ant'], acc)
+    if not results:
+        return None, 0.0
 
-    # Demo: one sample per class — reuse tensors already in the test DataLoader
-    X_test_np = test_dl.dataset.tensors[0].numpy()   # [N x 1 x R x A]
-    Y_test_np = test_dl.dataset.tensors[1].numpy()   # [N] (0-indexed)
+    save_results_csv(results,
+                     filepath=f'results_per_seed_N{n_ant}.csv')
 
-    print("\nDemo inference — one sample per class:")
-    for cls in range(N_CLASSES):
-        idx = np.where(Y_test_np == cls)[0][0]
-        predict_shape(X_test_np[idx], model, true_label=cls)
+    res       = results[0]
+    best_model = res['best_model']
 
-    return model, acc
+    # Demo: one sample per class using tensors reloaded from the same file
+    raw       = scipy.io.loadmat(filepath) \
+        if filepath.endswith('.mat') and not _is_hdf5_mat(filepath) \
+        else None
+
+    if raw is not None:
+        X_test_np = raw['X_test'].astype(np.float32)
+        Y_test_np = raw['Y_test'].flatten().astype(int) - 1
+
+        print("\nDemo inference — one sample per class:")
+        for cls in range(N_CLASSES):
+            idx = np.where(Y_test_np == cls)[0][0]
+            predict_shape(X_test_np[idx], best_model, true_label=cls)
+
+    return best_model, res['mean_acc']
+
+
+def _is_hdf5_mat(filepath):
+    """True if the .mat is MATLAB v7.3 (HDF5) — can't be read by scipy.io."""
+    try:
+        with open(filepath, 'rb') as f:
+            return f.read(8).startswith(b'\x89HDF')
+    except Exception:
+        return False
 
 
 # ============================================================
@@ -853,10 +1121,26 @@ if __name__ == '__main__':
         '--single', type=str, default=None, metavar='FILE',
         help='Train on one .mat file instead of all experiments'
     )
+    parser.add_argument(
+        '--seeds', type=str, default=None, metavar='LIST',
+        help='Comma-separated list of RNG seeds, e.g. "0,1,2". '
+             'Defaults to the module-level SEEDS list.'
+    )
     args = parser.parse_args()
 
+    # Parse --seeds override
+    if args.seeds is not None:
+        try:
+            seeds_override = [int(s.strip()) for s in args.seeds.split(',') if s.strip()]
+        except ValueError:
+            raise SystemExit(f"Invalid --seeds value: {args.seeds!r}")
+        if not seeds_override:
+            raise SystemExit("--seeds must list at least one integer")
+    else:
+        seeds_override = SEEDS
+
     if args.single:
-        run_single(args.single)
+        run_single(args.single, seeds=seeds_override)
 
     else:
         print("="*62)
@@ -869,7 +1153,8 @@ if __name__ == '__main__':
             status = 'found' if os.path.exists(exp['file']) else 'MISSING'
             print(f"  N={exp['n_ant']:2d}  {exp['file']}  [{status}]")
 
-        results = run_antenna_experiments(ANTENNA_EXPERIMENTS)
+        results = run_antenna_experiments(ANTENNA_EXPERIMENTS,
+                                           seeds=seeds_override)
 
         if len(results) == 0:
             print("\nNo experiments completed.")
@@ -883,11 +1168,17 @@ if __name__ == '__main__':
             # Comparison plot across all completed experiments
             plot_antenna_comparison(results)
 
-            # Demo inference using the best model
-            best   = max(results, key=lambda r: r['accuracy'])
+            # Dump per-seed results to CSV for the writeup
+            save_results_csv(results)
+
+            # Demo inference using the best model (best mean across seeds)
+            best   = max(results, key=lambda r: r['mean_acc'])
             n_best = best['n_ant']
             print(f"\nBest: N_ant={n_best} "
-                  f"({best['accuracy']*100:.1f}% accuracy)")
+                  f"({best['mean_acc']*100:.1f}% mean accuracy "
+                  f"± {best['std_acc']*100:.1f}%, "
+                  f"best seed = {best['best_seed']}: "
+                  f"{best['best_accuracy']*100:.1f}%)")
 
             raw       = scipy.io.loadmat(f'radar_shapes_N{n_best}.mat')
             X_test_np = raw['X_test'].astype(np.float32)
@@ -897,7 +1188,7 @@ if __name__ == '__main__':
             for cls in range(N_CLASSES):
                 idx = np.where(Y_test_np == cls)[0][0]
                 predict_shape(X_test_np[idx],
-                              best['model'],
+                              best['best_model'],
                               true_label=cls)
 
         print("\n" + "="*55)

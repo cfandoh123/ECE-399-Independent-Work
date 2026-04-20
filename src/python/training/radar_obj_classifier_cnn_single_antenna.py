@@ -29,10 +29,25 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 import time
 import os
+import csv
+import random
+import argparse
 
-# ── Reproducibility ─────────────────────────────────────────
-torch.manual_seed(42)
-np.random.seed(42)
+# ── Reproducibility / multi-seed configuration ───────────────
+# Each run is trained once per seed so that test accuracy is
+# reported as mean ± std across independent runs. With only
+# ~2,160 samples, a single run has several percentage points of
+# noise. Override from the CLI with --seeds 0,1,2.
+SEEDS = [0, 1, 2, 3, 4]
+
+
+def set_seed(seed):
+    """Seed torch, numpy and random for one training run."""
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 # ── Device ──────────────────────────────────────────────────
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -79,13 +94,16 @@ def load_dataset(filepath='radar_shapes_simple.mat'):
         n = (Y_tr == i).sum().item()
         print(f"  {i+1}. {name:12s}: {n} samples")
 
-    BATCH = 32
+    # Larger batch reduces gradient/val-loss variance.
+    # Val/test use a bigger batch since forward-only has no memory risk.
+    BATCH      = 256
+    EVAL_BATCH = 512
     train_dl = DataLoader(TensorDataset(X_tr, Y_tr),
-                          batch_size=BATCH, shuffle=True)
+                          batch_size=BATCH, shuffle=True, drop_last=True)
     val_dl   = DataLoader(TensorDataset(X_vl, Y_vl),
-                          batch_size=BATCH, shuffle=False)
+                          batch_size=EVAL_BATCH, shuffle=False)
     test_dl  = DataLoader(TensorDataset(X_te, Y_te),
-                          batch_size=BATCH, shuffle=False)
+                          batch_size=EVAL_BATCH, shuffle=False)
 
     return train_dl, val_dl, test_dl
 
@@ -176,12 +194,22 @@ def train(model, train_dl, val_dl, n_epochs=40, lr=1e-3, patience=8):
     model     = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=3
+
+    # Cosine annealing — deterministic LR decay over n_epochs.
+    # Replaces ReduceLROnPlateau, which reacted to noisy val loss
+    # and introduced its own instability.
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=n_epochs, eta_min=1e-6
     )
 
-    history = {'train_loss':[], 'val_loss':[], 
-               'train_acc':[], 'val_acc':[]}
+    history = {
+        'train_loss'  : [], 'val_loss'    : [],
+        'train_acc'   : [], 'val_acc'     : [],
+        'val_loss_ema': [], 'val_acc_ema' : [],
+    }
+    ema_val_loss = None
+    ema_val_acc  = None
+    EMA_ALPHA    = 0.3          # 0 = fully smoothed, 1 = no smoothing
 
     best_val   = float('inf')
     best_wts   = None
@@ -232,21 +260,34 @@ def train(model, train_dl, val_dl, n_epochs=40, lr=1e-3, patience=8):
         va_loss /= va_n
         va_acc   = va_corr / va_n
 
-        scheduler.step(va_loss)
+        # -- EMA smoothing of val metrics --
+        # Damps per-epoch noise so training curves and early stopping
+        # react to trends, not to single-batch spikes.
+        if ema_val_loss is None:
+            ema_val_loss = va_loss
+            ema_val_acc  = va_acc
+        else:
+            ema_val_loss = EMA_ALPHA * va_loss + (1 - EMA_ALPHA) * ema_val_loss
+            ema_val_acc  = EMA_ALPHA * va_acc  + (1 - EMA_ALPHA) * ema_val_acc
+
+        scheduler.step()
         cur_lr = optimizer.param_groups[0]['lr']
 
         history['train_loss'].append(tr_loss)
         history['val_loss'].append(va_loss)
         history['train_acc'].append(tr_acc)
         history['val_acc'].append(va_acc)
+        history['val_loss_ema'].append(ema_val_loss)
+        history['val_acc_ema'].append(ema_val_acc)
 
         print(f"{ep:>4} | {tr_loss:>8.4f} | {va_loss:>8.4f} | "
               f"{tr_acc*100:>6.1f}% | {va_acc*100:>6.1f}% | "
-              f"{cur_lr:>9.6f}  ({time.time()-t0:.1f}s)")
+              f"{cur_lr:>9.6f}  ({time.time()-t0:.1f}s)  "
+              f"EMA_VaLoss={ema_val_loss:.4f}")
 
-        # ── Early stopping ───────────────────────────────────
-        if va_loss < best_val:
-            best_val = va_loss
+        # ── Early stopping (on smoothed val loss, not raw) ───
+        if ema_val_loss < best_val:
+            best_val = ema_val_loss
             best_wts = {k: v.clone() for k, v in model.state_dict().items()}
             no_improve = 0
         else:
@@ -327,15 +368,30 @@ def plot_history(history):
 
     eps = range(1, len(history['train_loss'])+1)
 
-    ax1.plot(eps, history['train_loss'], 'b-o', ms=3, label='Train')
-    ax1.plot(eps, history['val_loss'],   'r-o', ms=3, label='Val')
+    # Raw val curves in faded background; EMA curves in foreground.
+    has_ema = 'val_loss_ema' in history and len(history['val_loss_ema']) > 0
+
+    ax1.plot(eps, history['train_loss'], 'b-o', ms=3, label='Train', alpha=0.85)
+    if has_ema:
+        ax1.plot(eps, history['val_loss'],     'r-',  lw=1, alpha=0.3,
+                 label='Val (raw)')
+        ax1.plot(eps, history['val_loss_ema'], 'r-o', ms=3,
+                 label='Val (EMA)')
+    else:
+        ax1.plot(eps, history['val_loss'], 'r-o', ms=3, label='Val')
     ax1.set_xlabel('Epoch'); ax1.set_ylabel('Loss')
     ax1.set_title('Loss'); ax1.legend(); ax1.grid(True)
 
     ax2.plot(eps, [a*100 for a in history['train_acc']],
-             'b-o', ms=3, label='Train')
-    ax2.plot(eps, [a*100 for a in history['val_acc']],
-             'r-o', ms=3, label='Val')
+             'b-o', ms=3, label='Train', alpha=0.85)
+    if has_ema:
+        ax2.plot(eps, [a*100 for a in history['val_acc']],
+                 'r-', lw=1, alpha=0.3, label='Val (raw)')
+        ax2.plot(eps, [a*100 for a in history['val_acc_ema']],
+                 'r-o', ms=3, label='Val (EMA)')
+    else:
+        ax2.plot(eps, [a*100 for a in history['val_acc']],
+                 'r-o', ms=3, label='Val')
     ax2.set_xlabel('Epoch'); ax2.set_ylabel('Accuracy (%)')
     ax2.set_title('Accuracy'); ax2.legend()
     ax2.grid(True); ax2.set_ylim([0, 105])
@@ -349,8 +405,8 @@ def plot_history(history):
 # ============================================================
 #  SECTION 6: SINGLE SAMPLE INFERENCE
 #
-%  This is the function you call on any new heatmap —
-%  from simulation, Simulink Radar Toolbox, or real radar.
+#  This is the function you call on any new heatmap —
+#  from simulation, Simulink Radar Toolbox, or real radar.
 # ============================================================
 
 def predict_shape(heatmap, model, true_label=None):
@@ -451,57 +507,210 @@ def predict_shape(heatmap, model, true_label=None):
 
 
 # ============================================================
+#  SECTION 6b: MULTI-SEED HELPERS
+# ============================================================
+
+def per_class_accuracy(preds, labels):
+    """Return accuracy dict keyed by class name."""
+    out = {}
+    for i, name in enumerate(CLASS_NAMES):
+        mask = labels == i
+        out[name] = (float(np.mean(preds[mask] == labels[mask]))
+                     if mask.sum() > 0 else 0.0)
+    return out
+
+
+def plot_history_multi(histories, seeds):
+    """Overlay training curves across seeds; mean curve solid on top."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    fig.suptitle(f'Training History (seeds={seeds})',
+                 fontsize=13, fontweight='bold')
+
+    min_len = min(len(h['train_loss']) for h in histories)
+    eps     = range(1, min_len + 1)
+
+    has_ema = all('val_loss_ema' in h and len(h['val_loss_ema']) > 0
+                  for h in histories)
+
+    def stack(key):
+        return np.stack([np.array(h[key][:min_len]) for h in histories])
+
+    tr_loss = stack('train_loss')
+    va_loss = stack('val_loss_ema' if has_ema else 'val_loss')
+    tr_acc  = stack('train_acc')  * 100
+    va_acc  = stack('val_acc_ema' if has_ema else 'val_acc') * 100
+
+    for h in histories:
+        ax1.plot(eps, h['train_loss'][:min_len], 'b-', lw=1, alpha=0.25)
+        ax1.plot(eps, (h.get('val_loss_ema') or h['val_loss'])[:min_len],
+                 'r-', lw=1, alpha=0.25)
+        ax2.plot(eps, [a*100 for a in h['train_acc'][:min_len]],
+                 'b-', lw=1, alpha=0.25)
+        ax2.plot(eps, [a*100 for a in
+                       (h.get('val_acc_ema') or h['val_acc'])[:min_len]],
+                 'r-', lw=1, alpha=0.25)
+
+    ax1.plot(eps, tr_loss.mean(0), 'b-', lw=2, label='Train (mean)')
+    ax1.plot(eps, va_loss.mean(0), 'r-', lw=2,
+             label='Val (EMA mean)' if has_ema else 'Val (mean)')
+    ax1.set_xlabel('Epoch'); ax1.set_ylabel('Loss')
+    ax1.set_title('Loss'); ax1.legend(); ax1.grid(True, alpha=0.3)
+
+    ax2.plot(eps, tr_acc.mean(0), 'b-', lw=2, label='Train (mean)')
+    ax2.plot(eps, va_acc.mean(0), 'r-', lw=2,
+             label='Val (EMA mean)' if has_ema else 'Val (mean)')
+    ax2.set_xlabel('Epoch'); ax2.set_ylabel('Accuracy (%)')
+    ax2.set_title('Accuracy'); ax2.legend(); ax2.grid(True, alpha=0.3)
+    ax2.set_ylim([0, 105])
+
+    plt.tight_layout()
+    plt.savefig('training_history_simple.png', dpi=150,
+                bbox_inches='tight')
+    plt.show()
+
+
+def save_results_csv(accuracies, per_class_seed, seeds,
+                     filepath='results_per_seed_single.csv'):
+    """Dump per-seed test accuracies to CSV."""
+    rows = []
+    for i, seed in enumerate(seeds):
+        row = {'seed': seed, 'test_accuracy': accuracies[i]}
+        for name in CLASS_NAMES:
+            row[f'acc_{name}'] = per_class_seed[name][i]
+        rows.append(row)
+
+    if not rows:
+        return
+
+    with open(filepath, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"Saved per-seed results: {filepath}")
+
+
+# ============================================================
 #  SECTION 7: MAIN
 # ============================================================
 
 if __name__ == '__main__':
 
-    # Step 1 — Load data
-    train_dl, val_dl, test_dl = load_dataset('radar_shapes_simple.mat')
-
-    # Step 2 — Build model
-    model  = ShapeCNN(n_classes=N_CLASSES)
-    params = sum(p.numel() for p in model.parameters())
-    print(f"\nModel: ShapeCNN  |  Parameters: {params:,}")
-
-    # Step 3 — Train
-    model, history = train(
-        model, train_dl, val_dl,
-        n_epochs = 40,
-        lr       = 1e-3,
-        patience = 8
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--file', type=str, default='radar_shapes_simple.mat',
+        help='Path to the .mat dataset file',
     )
+    parser.add_argument(
+        '--seeds', type=str, default=None, metavar='LIST',
+        help='Comma-separated list of RNG seeds, e.g. "0,1,2". '
+             'Defaults to the module-level SEEDS list.',
+    )
+    args = parser.parse_args()
 
-    # Step 4 — Plot training curves
-    plot_history(history)
+    if args.seeds is not None:
+        try:
+            seeds_run = [int(s.strip()) for s in args.seeds.split(',') if s.strip()]
+        except ValueError:
+            raise SystemExit(f"Invalid --seeds value: {args.seeds!r}")
+        if not seeds_run:
+            raise SystemExit("--seeds must list at least one integer")
+    else:
+        seeds_run = SEEDS
 
-    # Step 5 — Evaluate on test set
-    acc, preds, labels = evaluate(model, test_dl)
+    print("=" * 62)
+    print(f"  RADAR SHAPE CLASSIFICATION — SINGLE ANTENNA, MULTI-SEED")
+    print(f"  file  : {args.file}")
+    print(f"  seeds : {seeds_run}")
+    print("=" * 62)
 
-    # Step 6 — Save model
+    # Per-seed accumulators
+    seed_accs      = []
+    seed_histories = []
+    seed_per_class = {name: [] for name in CLASS_NAMES}
+    best_acc       = -1.0
+    best_seed      = None
+    best_model     = None
+
+    for seed in seeds_run:
+        print(f"\n---- seed {seed} ----")
+        set_seed(seed)
+
+        # Reload per seed so the DataLoader shuffle also varies
+        train_dl, val_dl, test_dl = load_dataset(args.file)
+
+        model  = ShapeCNN(n_classes=N_CLASSES)
+        if seed == seeds_run[0]:
+            params = sum(p.numel() for p in model.parameters())
+            print(f"Model: ShapeCNN  |  Parameters: {params:,}")
+
+        model, history = train(
+            model, train_dl, val_dl,
+            n_epochs = 40,
+            lr       = 1e-3,
+            patience = 8,
+        )
+
+        acc, preds, labels = evaluate(model, test_dl)
+        pc = per_class_accuracy(preds, labels)
+
+        seed_accs.append(acc)
+        seed_histories.append(history)
+        for name in CLASS_NAMES:
+            seed_per_class[name].append(pc.get(name, 0.0))
+
+        if acc > best_acc:
+            best_acc   = acc
+            best_seed  = seed
+            best_model = model
+
+        print(f"seed={seed}  |  acc={acc*100:.2f}%")
+
+    # Aggregate
+    mean_acc = float(np.mean(seed_accs))
+    std_acc  = (float(np.std(seed_accs, ddof=1))
+                if len(seed_accs) > 1 else 0.0)
+
+    print(f"\n{'='*62}")
+    print(f"  SUMMARY  ({len(seeds_run)} seeds)")
+    print(f"{'='*62}")
+    print(f"  Mean test accuracy : {mean_acc*100:.2f}% ± {std_acc*100:.2f}%")
+    print(f"  Best seed          : {best_seed}  ({best_acc*100:.2f}%)")
+    print(f"  Per-seed accuracies:")
+    for s, a in zip(seeds_run, seed_accs):
+        print(f"    seed {s}: {a*100:.2f}%")
+    print(f"{'='*62}\n")
+
+    # Plot overlaid training curves across seeds
+    plot_history_multi(seed_histories, seeds_run)
+
+    # Save best model
     torch.save({
-        'model_state_dict': model.state_dict(),
-        'class_names'     : CLASS_NAMES,
-        'n_classes'       : N_CLASSES,
-        'test_accuracy'   : acc,
+        'model_state_dict'  : best_model.state_dict(),
+        'class_names'       : CLASS_NAMES,
+        'n_classes'         : N_CLASSES,
+        'best_test_accuracy': best_acc,
+        'best_seed'         : best_seed,
+        'mean_test_accuracy': mean_acc,
+        'std_test_accuracy' : std_acc,
+        'seeds'             : seeds_run,
     }, 'radar_shape_simple_model.pt')
     print("Model saved: radar_shape_simple_model.pt")
 
-    # Step 7 — Demo inference on one test sample
-    print("\n--- Demo: Predict one test sample ---")
+    # Dump per-seed CSV for the writeup
+    save_results_csv(seed_accs, seed_per_class, seeds_run)
 
-    # Get dataset tensors for direct access
+    # Demo inference using the best model
+    print("\n--- Demo: Predict one test sample (best seed) ---")
     import scipy.io
-    data      = scipy.io.loadmat('radar_shapes_simple.mat')
+    data      = scipy.io.loadmat(args.file)
     X_test_np = data['X_test'].astype(np.float32)
     Y_test_np = data['Y_test'].flatten().astype(int) - 1
 
-    # Pick one sample from each class
     print("\nRunning inference on one sample per class:")
     for cls in range(N_CLASSES):
         idx = np.where(Y_test_np == cls)[0][0]
         hm  = X_test_np[idx]   # [512 × 256]
-        predict_shape(hm, model, true_label=cls)
+        predict_shape(hm, best_model, true_label=cls)
 
     # Step 8 — How to use on Simulink / real radar data
     print("\n" + "="*55)
