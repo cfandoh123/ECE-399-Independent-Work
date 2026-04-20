@@ -1,0 +1,67 @@
+PS C:\Users\ca0977\OneDrive - Princeton University\Desktop\Course Work\Year 3 Semester 2\ECE 399\IW\Shapes Only - Multiple Radar Model> python radar_shape_simple_cnn.py --single radar_shapes_N4.mat
+Device: cpu
+
+
+Single-file mode: radar_shapes_N4.mat
+
+Loading: radar_shapes_N4.mat
+  N_ant  : 4
+  Train  : torch.Size([6050, 1, 256, 512])
+  Val    : torch.Size([1295, 1, 256, 512])
+  Test   : torch.Size([1295, 1, 256, 512])
+
+  Class distribution (train):
+    1. Circle      : 1210  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    2. Square      : 1210  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    3. Rectangle   : 1210  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    4. Triangle    : 1210  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    5. Oval        : 1210  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ShapeCNN — 115,045 parameters
+
+==============================================================
+  Training | N_ant=4 | 40 epochs | lr=0.001
+==============================================================
+  Ep |   TrLoss |   VaLoss |   TrAcc |   VaAcc |        LR
+--------------------------------------------------------------
+   1 |   1.5377 |   1.7138 |   28.8% |   24.2% |  0.001000  (341.2s)
+   2 |   1.4258 |   1.4299 |   37.6% |   34.1% |  0.001000  (474.3s)
+   3 |   1.2261 |   1.2702 |   47.1% |   44.0% |  0.001000  (450.5s)
+   4 |   1.0571 |   1.0215 |   54.9% |   55.1% |  0.001000  (420.2s)
+   5 |   0.9252 |   1.2768 |   60.6% |   47.9% |  0.001000  (438.6s)
+   6 |   0.8016 |   1.1349 |   67.4% |   56.1% |  0.001000  (445.9s)
+   7 |   0.7276 |   1.0880 |   71.2% |   53.6% |  0.001000  (456.2s)
+   8 |   0.6021 |   0.6792 |   76.8% |   75.4% |  0.001000  (451.0s)
+   9 |   0.5438 |   0.5834 |   79.8% |   76.5% |  0.001000  (1043.1s)
+  10 |   0.4867 |   0.7851 |   81.8% |   65.5% |  0.001000  (377.7s)
+  11 |   0.4074 |   0.3618 |   85.7% |   88.2% |  0.001000  (422.1s)
+  12 |   0.3542 |   0.5924 |   88.3% |   78.3% |  0.001000  (422.3s)
+  13 |   0.3126 |   0.4389 |   89.3% |   81.9% |  0.001000  (421.0s)
+  14 |   0.2530 |   0.2586 |   91.7% |   90.4% |  0.001000  (417.9s)
+  15 |   0.2124 |   0.3486 |   93.3% |   85.2% |  0.001000  (340.3s)
+  16 |   0.1866 |   0.1985 |   94.1% |   92.7% |  0.001000  (286.9s)
+  17 |   0.2089 |   0.2060 |   93.0% |   93.2% |  0.001000  (285.9s)
+  18 |   0.1644 |   0.4177 |   95.0% |   83.0% |  0.001000  (285.5s)
+  19 |   0.1188 |   0.2144 |   96.5% |   91.9% |  0.001000  (282.3s)
+  20 |   0.1264 |   0.1585 |   96.0% |   93.9% |  0.001000  (289.2s)
+  21 |   0.1271 |   0.1043 |   96.2% |   96.5% |  0.001000  (291.5s)
+  22 |   0.1059 |   0.1196 |   96.7% |   96.6% |  0.001000  (289.5s)
+  23 |   0.1271 |   0.0338 |   96.2% |   99.2% |  0.001000  (286.7s)
+  24 |   0.0922 |   0.0894 |   96.9% |   97.0% |  0.001000  (291.7s)
+  25 |   0.0850 |   0.0542 |   97.6% |   98.2% |  0.001000  (297.5s)
+  26 |   0.0802 |   0.0551 |   97.7% |   98.1% |  0.001000  (313.5s)
+  27 |   0.0650 |   0.9685 |   98.1% |   74.4% |  0.000500  (303.8s)
+  28 |   0.0398 |   0.0081 |   99.1% |   99.8% |  0.000500  (305.8s)
+  29 |   0.0243 |   0.0045 |   99.5% |   99.9% |  0.000500  (309.6s)
+  30 |   0.0259 |   0.0126 |   99.4% |   99.7% |  0.000500  (323.3s)
+  31 |   0.0386 |   0.0088 |   99.0% |  100.0% |  0.000500  (466.8s)
+  32 |   0.0262 |   0.0026 |   99.4% |   99.9% |  0.000500  (451.3s)
+  33 |   0.0348 |   0.0110 |   99.0% |   99.8% |  0.000500  (411.2s)
+  34 |   0.0517 |   0.6440 |   98.5% |   82.0% |  0.000500  (381.9s)
+  35 |   0.0319 |   0.0019 |   99.2% |  100.0% |  0.000500  (396.6s)
+  36 |   0.0149 |   0.0009 |   99.8% |  100.0% |  0.000500  (445.4s)
+  37 |   0.0267 |   0.0679 |   99.2% |   97.7% |  0.000500  (494.0s)
+  38 |   0.0312 |   0.0834 |   99.1% |   97.1% |  0.000500  (347.9s)
+  39 |   0.0380 |   0.8379 |   99.0% |   77.5% |  0.000500  (398.4s)
+  40 |   0.0404 |   0.0122 |   99.0% |   99.7% |  0.000250  (414.3s)
+
+  Best val loss: 0.0009
