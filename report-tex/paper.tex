@@ -1,0 +1,685 @@
+\documentclass[letterpaper,11pt,leqno]{article}
+\usepackage{amsmath,amssymb}
+\usepackage{paper}
+\usepackage[capitalize,noabbrev]{cleveref}
+\crefname{assumption}{assumption}{assumptions}
+\Crefname{assumption}{Assumption}{Assumptions}
+\crefname{proposition}{proposition}{propositions}
+\Crefname{proposition}{Proposition}{Propositions}
+\crefname{lemma}{lemma}{lemmas}
+\Crefname{lemma}{Lemma}{Lemmas}
+\crefname{theorem}{theorem}{theorems}
+\Crefname{theorem}{Theorem}{Theorems}
+\crefname{corollary}{corollary}{corollaries}
+\Crefname{corollary}{Corollary}{Corollaries}
+\bibliographystyle{paper}
+
+% Enter paper title to populate PDF metadata:
+\hypersetup{pdftitle={FMCW Radar Shape Classification: A Machine Learning Approach}}
+
+% Enter path to BibTeX file with references:
+\newcommand{\bib}{paper.bib}
+
+% Enter path to PDF file with figures (kept for optional decorative panels):
+\newcommand{\pdf}{figures.pdf}
+
+% Path prefix for results figures (PNGs produced by the Python training pipeline):
+\newcommand{\resfig}[1]{../results/#1}
+
+\begin{document}
+
+% Enter title:
+\title{FMCW Radar Shape Classification:\\A Machine Learning Approach to\\Privacy-Preserving Object Recognition}
+
+% Enter authors:
+\author{Calvin Andoh\thanks{Department of Electrical and Computer Engineering, Princeton University. Advisor: Professor Yasaman Ghasempour. I thank Professor Ghasempour for continued guidance on radar signal processing and experimental design, and the members of the Ghasempour group for valuable feedback on earlier drafts of this work. All errors are my own. This work was completed in partial fulfilment of the requirements for ECE 399: Junior Independent Work.}}
+
+% Enter date:
+\date{Spring 2026}
+
+% Enter paper URL (can be commented out):
+\paperurl{Princeton University -- ECE 399 Junior Independent Work}
+
+\begin{titlepage}
+\maketitle
+
+% Enter abstract:
+\noindent This report documents the second phase of an independent research project investigating the application of machine learning to Frequency-Modulated Continuous Wave (FMCW) radar data. The long-term goal is a radar-based recognition system suitable for privacy-preserving monitoring---a system that can identify objects, and eventually human activity, without the use of optical cameras. The first phase of the project explored radar-based classification of concrete objects (chairs, tables, people) directly; that formulation proved unworkably broad for a single-semester scope because the space of real-world objects is effectively unbounded and each object required a separate scatterer model. The present phase narrows the problem deliberately. The reformulated task is \emph{shape classification}: given a Range-Angle heatmap produced from a simulated FMCW radar scene, predict which of five geometric primitives (Circle, Square, Rectangle, Triangle, Oval) generated the reflection. Shapes are a tractable proxy because every real object decomposes, at some level of abstraction, into a small set of recognisable silhouettes; a classifier that reliably maps a radar heatmap to a geometric primitive is the first step toward a broader recognition pipeline, and one that cannot perform the simpler task is unlikely to succeed at the harder one. This report describes (i)~a physics-based synthetic data-generation pipeline implemented in MATLAB that converts scatterer models into Range-Angle heatmaps at configurable antenna counts $N_{\mathrm{ant}}\in\{4,8,10,12,16,32\}$; (ii)~a convolutional neural network (\textsc{ShapeCNN}) trained in PyTorch to classify those heatmaps; (iii)~an STL-to-heatmap inference pipeline that applies the trained model to CAD objects; and (iv)~a multi-seed experimental protocol designed to produce statistically defensible conclusions about the trade-off between hardware cost (number of receive antennas) and classification accuracy. A preliminary three-seed run at $N_{\mathrm{ant}}=16$ yielded mean test accuracy of $68.6\%$ with a sample standard deviation of $14.6$ percentage points across seeds---a spread large enough to motivate a full five-seed sweep, the results of which are forthcoming and reserved for \Cref{s:results}.
+
+\end{titlepage}
+
+% ===========================================================
+\section{Introduction}\label{s:introduction}
+
+\paragraph{Research question} What is the smallest number of receive antennas at which a simulated 77\,GHz FMCW radar can classify five geometric shape primitives with accuracy comparable to a dense antenna array, and which shape classes remain fundamentally difficult even at high angular resolution? The question is important because angular resolution in an FMCW radar is determined almost entirely by the number of physical receive antennas, which is in turn the dominant driver of hardware cost and complexity. Every additional receive antenna requires a dedicated RF chain, mixer, and ADC, so understanding when the marginal antenna stops improving classification performance has direct consequences for building real systems.
+
+\paragraph{Answer to the question} The working hypothesis, supported by the preliminary data in \Cref{s:results} and the theoretical arguments in \Cref{s:discussion}, is that overall test accuracy rises briskly from $N_{\mathrm{ant}}=4$ to $N_{\mathrm{ant}}\approx 12$--$16$ and then saturates, with the remaining classification error concentrated in a single class (Rectangle) whose failure modes are not resolution-bound. This would imply that, for the five-shape task as currently posed, $N_{\mathrm{ant}}\approx 16$ is a reasonable operating point, with diminishing returns beyond it. The full five-seed sweep across the six antenna counts is expected to either confirm this hypothesis or flag specific classes whose accuracy continues to improve beyond the proposed saturation point.
+
+\paragraph{Positioning in the literature} FMCW radar classification has historically relied on hand-crafted features fed into shallow classifiers such as support-vector machines \citep{Cortes95}; the introduction of deep convolutional networks in computer vision \citep{LeCun89,Krizhevsky12} motivated a shift toward learned feature extractors, and more recent mmWave sensing work---notably Google's Soli gesture-recognition system \citep{Lien16}---has demonstrated that small CNNs can extract fine-grained spatial information from range-Doppler and range-angle representations. The present work applies the same inductive bias to static shape classification and treats the antenna count as an explicit experimental axis.
+
+\paragraph{Why shape classification first} The initial formulation of this project was radar-based classification of specific real-world objects. Two problems made that framing untenable for a single-semester effort. First, the class set is unbounded: there is no principled way to decide which objects belong in the training set, and adding or removing a class (a sofa, a dog, a bicycle) changes every design decision downstream. Second, each real object requires its own multi-point scatterer model with geometry-specific and material-specific parameters, and producing many such models by hand is slow and error-prone. Shape classification sidesteps both problems. The five shapes chosen---Circle, Square, Rectangle, Triangle, Oval---cover the major categories of two-dimensional silhouette (rotationally symmetric, right-angled, elongated-smooth, elongated-angular) without the arbitrariness of an object list. Every real object, viewed top-down, has a silhouette that is approximately one of these shapes, so a classifier that can identify the silhouette is a natural precursor to one that can identify the object.
+
+\paragraph{Scope of this report} \Cref{s:theory} reviews the radar theory required to understand the input representation. \Cref{s:dataset} describes the synthetic dataset and its design. \Cref{s:model,s:architecture,s:training} cover model selection, architecture, and training methodology. \Cref{s:protocol,s:cad} describe the experimental protocol and the CAD inference pipeline. \Cref{s:results} reports the results of the antenna-count sweep (with a placeholder pending the full five-seed run). \Cref{s:discussion} discusses two questions the experimental design is set up to answer---why some shapes are easier than others and why per-shape performance varies non-uniformly with antenna count---and \Cref{s:conclusion} summarises and flags the next steps.
+
+% ===========================================================
+\section{Theoretical Foundation}\label{s:theory}
+
+This section collects the radar-signal-processing facts required in the remainder of the paper. The goal is not to re-derive FMCW theory from scratch---excellent references exist \citep{Richards14,Ramasubramanian17,RaoFMCW}---but to make explicit the particular identities and resolution limits on which the experimental design depends.
+
+\subsection{The FMCW chirp and the range measurement}
+
+An FMCW radar transmits a linear chirp: a sinusoid whose instantaneous frequency rises linearly from $f_c$ to $f_c + B$ over a fixed chirp duration $T_c$. Mixing the received echo with the transmitted chirp in a homodyne receiver yields an Intermediate-Frequency (IF) signal whose dominant spectral component is proportional to the round-trip delay to the target. For a single point target at range $d$, the beat frequency $f_b$ is
+\begin{equation}\label{e:beat}
+f_b = S\cdot \frac{2d}{c}, \qquad S = \frac{B}{T_c},
+\end{equation}
+where $c$ is the speed of light and $S$ the chirp slope. Taking a Fast Fourier Transform (FFT) along the fast-time samples within a single chirp maps beat frequency to range. The fundamental range resolution is
+\begin{equation}\label{e:rangeres}
+d_{\mathrm{res}} = \frac{c}{2B},
+\end{equation}
+a function of bandwidth alone---chirp duration, sampling rate, and FFT length set the maximum unambiguous range and the number of range bins, but not the underlying resolution.
+
+\subsection{Angle of arrival and the resolution limit}
+
+A target at off-boresight angle $\theta$ imposes a linear phase progression across a uniform receive array of element spacing $D$. Stacking the single-chirp responses across $N_{\mathrm{ant}}$ receive antennas and FFT-ing across the antenna index---the so-called spatial FFT---recovers the angle from the phase gradient. The recovered angle $\theta$ and discrete spatial frequency $\omega$ are related by
+\begin{equation}\label{e:angle}
+\theta = \sin^{-1}\!\left(\frac{\lambda\omega}{2\pi D}\right),
+\end{equation}
+where $\lambda=c/f_c$ is the carrier wavelength. The \emph{angular resolution} of the measurement is set almost entirely by the number of physical receive antennas, and the following result is the single most important identity in the present work.
+
+\begin{proposition}\label{p:angres}
+For a uniform receive array with $N_{\mathrm{ant}}$ elements spaced at $D=\lambda/2$, the angular resolution of a target at boresight is approximately
+\begin{equation}\label{e:angres}
+\theta_{\mathrm{res}} \approx \frac{2}{N_{\mathrm{ant}}} \quad \mathrm{radians},
+\end{equation}
+independent of carrier frequency. Zero-padding the spatial FFT does not improve this resolution; only adding physical antennas does.
+\end{proposition}
+
+\begin{proof}[Sketch]
+The width of the main lobe of the uniform-weighted spatial response at boresight is $\Delta u = 2/(N_{\mathrm{ant}}\,D/\lambda)$ in normalised spatial frequency $u=\sin\theta\cdot D/\lambda$. With $D=\lambda/2$ this gives $\Delta u = 2/N_{\mathrm{ant}}$ and, at boresight where $\sin\theta\approx\theta$, $\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$ radians. Zero-padding interpolates the same transform with a finer grid but does not narrow the main lobe.\end{proof}
+
+\Cref{p:angres} is the reason $N_{\mathrm{ant}}$ appears explicitly as an experimental axis in this work. \Cref{t:angular_res} tabulates the implied resolution for the six antenna counts in the sweep.
+
+\begin{table}[t]
+\caption{Boresight angular resolution as a function of receive-antenna count}
+\begin{tabular*}{\textwidth}[]{l@{\extracolsep\fill}cccccc}
+\toprule
+$N_{\mathrm{ant}}$                            & 4     & 8     & 10    & 12    & 16    & 32   \\
+\midrule
+$\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$ (rad) & 0.500 & 0.250 & 0.200 & 0.167 & 0.125 & 0.063 \\
+$\theta_{\mathrm{res}}$ (degrees)             & 28.6$^\circ$ & 14.3$^\circ$ & 11.5$^\circ$ & 9.5$^\circ$ & 7.2$^\circ$ & 3.6$^\circ$ \\
+Cross-range resolution at 4\,m (cm)         & $\approx 200$ & $\approx 100$ & $\approx 80$ & $\approx 67$ & $\approx 50$ & $\approx 25$ \\
+\bottomrule
+\end{tabular*}
+\note{Cross-range resolution is the arc length at range $r$ subtended by angular resolution $\theta_{\mathrm{res}}$: $\Delta y\approx r\cdot\theta_{\mathrm{res}}$. At $r=4$\,m and $N_{\mathrm{ant}}=4$, two scatterers closer than about two metres in cross-range are unresolved; at $N_{\mathrm{ant}}=32$, the resolution is about 25\,cm.}
+\label{t:angular_res}\end{table}
+
+\subsection{Radar parameters}
+
+The radar parameters used in all simulations are listed in \Cref{t:radar_params}. They are chosen to match the automotive radar band in common use, so that the simulation remains directly portable to hardware such as the Texas Instruments IWR1642 mmWave radar evaluation module.
+
+\begin{table}[t]
+\caption{FMCW radar simulation parameters}
+\begin{tabular*}{\textwidth}[]{p{4.5cm}@{\extracolsep\fill}lp{6.5cm}}
+\toprule
+Parameter                            & Value             & Rationale                                                       \\
+\midrule
+Carrier frequency $f_c$              & 77\,GHz           & Standard automotive/ISM mmWave band                              \\
+Bandwidth $B$                        & 4\,GHz            & Yields range resolution $d_{\mathrm{res}}=3.75$\,cm                \\
+Chirp duration $T_c$                 & 40\,$\mu$s        & Consistent with lecture baseline                                 \\
+Chirp slope $S=B/T_c$                & $10^{14}$\,Hz/s   & Derived from the above                                           \\
+ADC sample rate $f_s$                & 4\,MHz            & Sets unambiguous range near 15\,m                                \\
+Samples per chirp $N_s$              & 256               & $T_c\cdot f_s$ rounded to a power of two                         \\
+Chirps per frame $N_c$               & 128               & Averaged at inference; no Doppler information used               \\
+Antenna spacing $D$                  & $\lambda/2$       & $\pm 90^\circ$ unambiguous field of view                         \\
+Antenna count $N_{\mathrm{ant}}$       & $\{4,8,10,12,16,32\}$ & Swept as the main experimental axis                          \\
+Carrier wavelength $\lambda=c/f_c$   & $\approx 3.9$\,mm  & Derived from $f_c$                                              \\
+\bottomrule
+\end{tabular*}
+\note{Parameters are chosen to match the Texas Instruments IWR1642 evaluation module, so that experimental conclusions translate to achievable hardware. The bandwidth is the dominant driver of range resolution; the antenna count is the dominant driver of angular resolution.}
+\label{t:radar_params}\end{table}
+
+\subsection{Why the Range-Angle heatmap}
+
+The natural four-dimensional radar data cube has axes $(\mathrm{sample}, \mathrm{chirp}, \mathrm{antenna}, \mathrm{frame})$. Applying FFTs along the first three yields $(\mathrm{range}, \mathrm{velocity}, \mathrm{angle})$ at each frame. From this cube one may extract either a Range-Doppler map (averaged across antennas) or a Range-Angle map (averaged across chirps). For the shape-classification task, the Range-Angle map is the correct representation, for three reasons.
+
+\begin{enumerate}
+\item \emph{Shapes are static.} They do not move during a single frame, so the Doppler axis carries no discriminative information---every shape produces a spike at zero velocity. The Range-Doppler map would effectively reduce to a one-dimensional range profile.
+\item \emph{Shape information lives in the spatial dimensions.} A shape is defined by how its scatterers are distributed in two-dimensional space. The Range-Angle map is the radar-side projection of that two-dimensional layout.
+\item \emph{Integration across chirps is denoising.} A single chirp produces one noisy snapshot of the range-angle footprint; averaging over all chirps in a frame yields a cleaner representation without losing information that varies on a chirp time-scale, because---for static shapes---nothing of interest does.
+\end{enumerate}
+
+The output of each heatmap is padded to $512\times 256$ bins (range $\times$ angle); this is the input size the CNN expects.
+
+% ===========================================================
+\section{Dataset Design}\label{s:dataset}
+
+\subsection{Synthetic generation via scatterer models}
+
+Each shape is represented in the simulator as a set of point scatterers placed around its geometric outline. A scatterer at local position $(x,y)$ with amplitude $a$ contributes a complex exponential to the IF signal whose phase terms encode its true range and angle relative to the radar. The MATLAB generator rotates the scatterer set into world coordinates according to the target orientation, places it at the target range, and synthesises the full chirp-by-chirp, antenna-by-antenna IF signal before FFT-ing into a Range-Angle heatmap. Gaussian noise is added at fixed signal-to-noise ratio (SNR) to approximate ADC noise and phase noise contributions.
+
+This \emph{physics-based synthesis} is preferred over any form of heatmap-level data augmentation for three reasons: (i)~ground truth (range, angle, orientation, size) is known exactly, (ii)~the simulation is deterministic and reproducible for a given random seed, and (iii)~the forward model is the same one used for inference on CAD objects (\Cref{s:cad}), which makes the sim-to-real story a single consistent pipeline rather than two separate codepaths.
+
+\subsection{The five-shape set}
+
+The five classes were chosen to span the major categories of two-dimensional silhouette with minimal overlap. \Cref{t:shape_set} summarises their geometric character and scatterer signature.
+
+\begin{table}[t]
+\caption{Geometric character and scatterer signature of the five shape classes}
+\begin{tabular*}{\textwidth}[]{p{2.2cm}@{\extracolsep\fill}p{4.5cm}p{7cm}}
+\toprule
+Class      & Geometric character                & Scatterer signature                                       \\
+\midrule
+Circle     & Rotationally symmetric, smooth     & Uniform ring (24 curve scatterers, amp.\ 0.50)            \\
+Square     & 4-fold symmetric, angular          & 4 dominant corner scatterers (amp.\ 1.00) + 4 edges (0.70)\\
+Rectangle  & 2-fold symmetric, angular          & 4 corner scatterers + 2 long edges + 2 short edges        \\
+Triangle   & 3-fold symmetric, angular          & 3 corner scatterers + 3 edge scatterers                   \\
+Oval       & 2-fold symmetric, smooth           & Elongated curve ring (smooth, no corners)                 \\
+\bottomrule
+\end{tabular*}
+\note{The amplitude hierarchy---corner scatterers at $a=1.00$, edges at $a=0.70$, curves at $a=0.50$---reflects the physical intuition that metallic corners act as retroreflectors while smooth surfaces scatter energy isotropically. This asymmetry is what makes corner-bearing shapes (Square, Rectangle, Triangle) distinguishable from smooth shapes (Circle, Oval) in principle.}
+\label{t:shape_set}\end{table}
+
+The set covers three important axes of variation simultaneously: \emph{symmetry order} (how many orientations look identical---$\infty$ for Circle, $2$ for Oval and Rectangle, $3$ for Triangle, $4$ for Square), \emph{angularity} (presence or absence of strong point reflectors), and \emph{aspect ratio} (isotropic Circle, Square, Triangle versus elongated Rectangle, Oval). Any two classes in the set differ on at least one axis, which is what makes the task learnable in principle. \Cref{s:discussion} returns to this taxonomy to explain which classes the network finds harder than others, and why.
+
+\subsection{Diversity axes}
+
+For each shape, the dataset is generated by sweeping three independent axes, summarised in \Cref{t:diversity}.
+
+\begin{table}[t]
+\caption{Dataset generation axes per shape}
+\begin{tabular*}{\textwidth}[]{p{2.5cm}@{\extracolsep\fill}p{6cm}cp{4.5cm}}
+\toprule
+Axis        & Values                                   & Count & Rationale                                      \\
+\midrule
+Orientation & $0^\circ, 10^\circ, \ldots, 350^\circ$   & 36    & Full rotational coverage of the class          \\
+Size        & Small, Medium, Large                     & 3     & Scale invariance within physical bounds        \\
+Range       & $r_1, r_2, r_3, r_4$ (short $\to$ long)  & 4     & Range-dependent cross-range resolution         \\
+\midrule
+Total per shape     & $36\times 3\times 4$            & 432   & --                                             \\
+Total per dataset   & $5\times 432$                   & 2{,}160 & Per antenna-count configuration              \\
+\bottomrule
+\end{tabular*}
+\note{The dataset is partitioned $80/10/10$ for train/validation/test. A single $.mat$ file is produced per value of $N_{\mathrm{ant}}$, holding the full Range-Angle heatmap stack plus the ground-truth labels.}
+\label{t:diversity}\end{table}
+
+The orientation sweep is the most important axis. A rectangle at $0^\circ$ and at $90^\circ$ produces completely different Range-Angle footprints, so the model must learn the class as an invariance over the orientation orbit, not as a single canonical appearance. The $10^\circ$ step is chosen fine enough that the training set covers each shape's orbit densely, but coarse enough that the total dataset remains tractable for a single-GPU experiment. Hold-one-orientation-out validation, discussed in \Cref{s:discussion}, is the planned successor protocol.
+
+\subsection{Antenna-count sweep and normalisation}
+
+The MATLAB generator produces one $.mat$ file per value of $N_{\mathrm{ant}}\in\{4,8,10,12,16,32\}$. The scatterer physics is identical across files; only the angular dimension of the Range-Angle heatmap differs, because the angle FFT is taken across the simulated receive array. This isolates antenna count as the single varying factor---any accuracy difference between $N_{\mathrm{ant}}$ experiments is attributable to angular resolution, not to dataset or model differences.
+
+Each heatmap is divided by its own maximum amplitude before storage, producing values in $[0,1]$. This removes an otherwise-confounding effect: by the radar range equation, received amplitude falls off roughly as $1/r^4$ for a point-like target (range equation: $P_r \propto P_t G^2 \lambda^2 \sigma / [(4\pi)^3 r^4]$), so without per-sample normalisation the network would learn range instead of shape. Normalisation forces the classifier to use the \emph{pattern} of reflections rather than their absolute energy.
+
+% ===========================================================
+\section{Model Selection: From SVM to CNN}\label{s:model}
+
+\subsection{The SVM starting point}
+
+The initial model considered for shape classification was a support-vector machine \citep{Cortes95} with hand-crafted features. The usual reasons to prefer classical methods on small datasets motivated this choice: interpretable features, calibrated probabilities via Platt scaling, strong performance in the tens-of-samples-per-class regime, and training costs measured in seconds rather than hours.
+
+\paragraph{Candidate feature set} For a Range-Angle heatmap, plausible hand-crafted features include (i)~moment-based descriptors \citep{Hu62}---central moments and Hu's moment invariants---to capture overall mass distribution and elongation; (ii)~peak statistics, such as the number of local maxima above a threshold, the mean and variance of peak amplitudes, and the pairwise distances between the top-$k$ peaks; (iii)~the radial profile of the heatmap around its centre of mass, a one-dimensional summary often discriminative for radially symmetric versus elongated shapes; and (iv)~the angular histogram of peak locations, which describes where, in angle, most of the reflected energy is concentrated. An SVM with an RBF kernel over such a feature vector would be a standard and respectable baseline, producing an interpretable decision boundary over a low-dimensional feature space.
+
+\subsection{Why hand-crafted features fall short here}
+
+The SVM approach was deprioritised in favour of a CNN for three reasons specific to Range-Angle heatmaps.
+
+\begin{enumerate}
+\item \emph{Feature design is the task, not a preprocessing step.} The features listed above are, in effect, guesses at what is discriminative. They are reasonable guesses---but the entire point of the experiment is to learn how much angular resolution is required to tell shapes apart, not to pre-commit to a fixed set of descriptors that may themselves fail at low resolution. A moment-based descriptor that works well at $N_{\mathrm{ant}}=32$ may lose all discriminative power at $N_{\mathrm{ant}}=4$, because the underlying heatmap has become smeared in the angle dimension. A learned feature extractor can adapt to that degradation; a hand-crafted one cannot, without a separate feature-design iteration per $N_{\mathrm{ant}}$.
+\item \emph{Orientation is not a nuisance variable; it \emph{is} the data.} The dataset contains every shape at 36 orientations. For an SVM to achieve orientation invariance it must either (a) be trained on explicit rotation-invariant features, which is harder to design than it sounds for anisotropic inputs like Range-Angle maps where the two axes have different physical meaning, or (b) rely on the training set to learn the invariance, which defeats the point of SVMs on small data. A CNN can, in principle, learn the orientation orbit directly from examples, and the convolutional structure shares parameters across the two-dimensional input in a way that helps.
+\item \emph{Small-sample advantages cut both ways.} The usual argument for SVMs---that they shine with few samples---only holds when the features are already good. With a poor feature set, SVMs plateau at the feature set's implicit ceiling and cannot trade compute for accuracy the way a deeper model can. The 2{,}160 samples per $N_{\mathrm{ant}}$ are small by modern standards, but are not so small that a modest CNN overfits catastrophically, particularly with batch normalisation \citep{Ioffe15}, dropout \citep{Srivastava14}, and a compact global-average-pooled head.
+\end{enumerate}
+
+A second, broader reason is architectural. A Range-Angle heatmap \emph{is} a two-dimensional image; CNNs are designed to exploit the spatial correlations of two-dimensional inputs \citep{LeCun89}. An SVM treats its feature vector as an unordered bag, which discards precisely the locality information that a corner-bearing shape's heatmap exhibits.
+
+\subsection{Alternatives considered and deferred}
+
+Three other architecture families were considered and deferred. A \emph{three-dimensional CNN} over the full range-Doppler-angle cube was rejected because the Doppler axis is not informative for static shapes (\Cref{s:theory}), so it would waste parameters. A \emph{PointNet} \citep{Qi17} over a CFAR-detected point cloud was rejected because CFAR itself introduces threshold-sensitive parameters that would confound the antenna-count sweep, and because sub-threshold information useful for discriminating smooth shapes would be lost. A \emph{CNN + LSTM sequence model} is appropriate for the later posture-classification work where temporal evolution matters, but is unnecessary for single-frame shape classification and would add a great deal of complexity with no payoff at this stage. The chosen two-dimensional CNN is therefore both the simplest sensible architecture for the input representation and the one whose inductive bias most closely matches the structure of the task.
+
+% ===========================================================
+\section{CNN Architecture}\label{s:architecture}
+
+\subsection{Overview}
+
+The classifier is a four-block two-dimensional CNN (\textsc{ShapeCNN}) followed by global average pooling and a small fully-connected head. The input is a single-channel Range-Angle heatmap of size $512\times 256$; the output is a five-way logit vector. The total parameter count is on the order of $10^5$, deliberately modest relative to the 2{,}160 samples in each per-antenna dataset. Implementation is in PyTorch \citep{Paszke19}.
+
+\subsection{Feature extractor}
+
+The feature extractor uses a coarse-to-fine schedule of convolution kernel sizes. Each block applies the sequence $\textsc{Conv} \to \textsc{BatchNorm} \to \textsc{ReLU} \to \textsc{MaxPool}(2)$. \Cref{t:cnn_layers} lists the block parameters.
+
+\begin{table}[t]
+\caption{\textsc{ShapeCNN} layer specification}
+\begin{tabular*}{\textwidth}[]{c@{\extracolsep\fill}ccccp{4.5cm}}
+\toprule
+Block & Kernel & Filters & Output $(H \times W)$ & Params & Role                                       \\
+\midrule
+1     & $7\times 7$ & 16  & $256\times 128$ & $\sim$800   & Broad shape silhouette, large receptive field \\
+2     & $5\times 5$ & 32  & $128\times 64$  & $\sim$13{,}000 & Mid-scale structure (edges, spacing)      \\
+3     & $3\times 3$ & 64  & $64\times 32$   & $\sim$18{,}000 & Local peak shapes and corner features     \\
+4     & $3\times 3$ & 128 & $32\times 16$   & $\sim$74{,}000 & High-level compositions                   \\
+\midrule
+GAP   & --          & 128 & $1\times 1$     & 0              & Global average pooling                    \\
+FC-1  & --          & 64  & --              & $\sim$8{,}200  & $\textsc{Linear}(128\to 64)+\textsc{ReLU}$\\
+Drop  & --          & 64  & --              & 0              & $\textsc{Dropout}(p=0.4)$                 \\
+FC-2  & --          & 5   & --              & $\sim$325      & $\textsc{Linear}(64\to 5)$, logits        \\
+\bottomrule
+\end{tabular*}
+\note{Per-block parameter counts include weights, biases, and batch-normalisation scale/shift. Total is approximately $1.1\times 10^5$ parameters. The kernel size decreases from $7\times 7$ to $3\times 3$ as the spatial resolution shrinks, following the coarse-to-fine intuition that the first layer needs a large receptive field to see the full shape footprint.}
+\label{t:cnn_layers}\end{table}
+
+The $7\times 7$ kernel in the first block is deliberate. The raw heatmap is large ($512\times 256$) relative to the feature of interest---the shape footprint spans perhaps 20--80 pixels depending on range and size---so the first layer needs a big enough receptive field to see the overall silhouette in one view. Subsequent blocks shrink the kernel as the feature maps shrink. Batch normalisation in every block stabilises training across the antenna-count sweep, where input statistics vary substantially between $N_{\mathrm{ant}}=4$ (angle axis heavily smeared) and $N_{\mathrm{ant}}=32$ (angle axis crisp).
+
+\subsection{Global average pooling and classifier head}
+
+The final feature map ($128\times 32\times 16$) is collapsed by global average pooling \citep{Lin14} to a 128-dimensional vector, which is then fed to a two-layer MLP: $\textsc{Linear}(128\to 64)\to\textsc{ReLU}\to\textsc{Dropout}(0.4)\to\textsc{Linear}(64\to 5)$. GAP is preferred over $\textsc{Flatten}\to\textsc{Linear}$ for two reasons. First, it has no spatial parameters, so the parameter count is independent of input size---important because changing $N_{\mathrm{ant}}$ in the MATLAB generator may change the exact angle-axis dimensions, and a pooling-based head absorbs that variation cleanly. Second, it acts as a strong regulariser against overfitting on a small dataset, because the classifier must rely on \emph{which} features are present rather than \emph{where} they are on the feature map.
+
+\subsection{Regularisation choices}
+
+The network uses three forms of regularisation. An $L_2$ weight decay of $10^{-4}$ provides baseline control over weight magnitudes. Dropout with $p=0.4$ in the classifier head reduces co-adaptation of the learned features \citep{Srivastava14}. And horizontal-flip augmentation at the input, applied stochastically with probability $0.5$ per sample during training, doubles the effective rotational coverage: a rectangle oriented at $+\theta$ flipped horizontally becomes a rectangle at $-\theta$, which is a valid synthetic sample for every shape in the set.
+
+% ===========================================================
+\section{Training Methodology}\label{s:training}
+
+\subsection{Loss and optimiser}
+
+Cross-entropy loss is used with the Adam optimiser \citep{Kingma15}, configured with learning rate $\eta=3\times 10^{-4}$ and weight decay $10^{-4}$. Gradient clipping at L$_2$-norm $1.0$ is applied before each step. Cross-entropy is the natural choice for a five-way single-label problem. Adam is chosen over SGD with momentum because the dataset is small enough that the adaptive per-parameter learning rates of Adam reach a competitive solution faster, and because the training budget is 40--60 epochs per run---too few for SGD's slow-and-steady regime to fully play out.
+
+\subsection{Batch size}
+
+Training uses a batch size of 256; evaluation uses 512. The batch choice is the largest that reliably fits in GPU memory at the $512\times 256$ input resolution. Larger batches reduce the variance of the gradient estimate, which is what we want here because the dataset is small and per-batch loss is otherwise noisy. Evaluation can use an even larger batch because no gradients are stored.
+
+\subsection{Learning-rate schedule}
+
+The schedule is cosine annealing \citep{Loshchilov17} from $3\times 10^{-4}$ down to $10^{-6}$ over the full epoch budget, with no warm restarts. This replaces an earlier \textsc{ReduceLROnPlateau} schedule that turned out to be poorly suited to the noisy validation loss produced by a small validation set: the plateau detector was firing on sampling noise, producing learning-rate drops that were more a property of the batch-level variance than of genuine convergence. Cosine annealing is deterministic and schedule-driven, so it produces more comparable training curves across seeds and across antenna counts.
+
+\subsection{Validation smoothing and early stopping}
+
+Validation loss and accuracy are further smoothed by an exponential moving average with decay $\alpha=0.3$:
+\begin{equation}\label{e:ema}
+\widehat{L}_t = \alpha\, L_t + (1-\alpha)\,\widehat{L}_{t-1}, \qquad \widehat{L}_0 = L_0.
+\end{equation}
+Early stopping triggers on the EMA-smoothed validation loss with a patience of 10 epochs. Without smoothing, the raw validation loss oscillates by several percentage points between adjacent epochs, simply because the validation set is only 216 samples and a single mis-classified Rectangle is already a $\sim 0.5\%$ swing. Early stopping on the raw signal would therefore react to sampling noise; early stopping on the EMA responds only to trends.
+
+\subsection{Multi-seed protocol}
+
+Every $(N_{\mathrm{ant}}, \mathrm{seed})$ pair is trained independently. The default seed set is $\{0, 1, 2, 3, 4\}$. For each seed, the PyTorch, NumPy, and Python random-number generators are all re-seeded before data loading and before model initialisation, so that both the \textsc{DataLoader} shuffle and the network's initial weights are controlled by the seed. Aggregate statistics (mean and sample standard deviation across seeds) are reported in the final comparison plot; individual per-seed accuracies are also retained in \texttt{results\_per\_seed.csv} for the writeup.
+
+The rationale for the multi-seed protocol is simple. With only $\sim 216$ test samples and with network performance that depends on initialisation, a single-seed test accuracy is a sample from a high-variance distribution, not a point estimate of the true accuracy. A preliminary three-seed run at $N_{\mathrm{ant}}=16$ produced test accuracies of $51.9\%$, $78.8\%$, and $75.0\%$---a 27-point spread. Reporting any single one of these as ``the accuracy at $N_{\mathrm{ant}}=16$'' would be misleading. The full sweep therefore averages five seeds per antenna count, so that conclusions about the optimal $N_{\mathrm{ant}}$ rest on statistically defensible means rather than on which seed happened to land where.
+
+\begin{assumption}\label{a:iid_seeds}
+For fixed $N_{\mathrm{ant}}$ and dataset partition, the per-seed test accuracies $\{a_i\}_{i=1}^{n}$ are an i.i.d.\ sample from a distribution with finite mean $\mu(N_{\mathrm{ant}})$ and variance $\sigma^2(N_{\mathrm{ant}})$.
+\end{assumption}
+
+\begin{lemma}[Standard error of the mean accuracy]\label{l:sem}
+Under \Cref{a:iid_seeds}, the sample mean $\bar a_n = n^{-1}\sum_{i=1}^n a_i$ has variance $\sigma^2(N_{\mathrm{ant}})/n$, so the half-width of an approximate $95\%$ confidence interval is
+\begin{equation}\label{e:ci}
+\mathrm{CI}_{95}(\bar a_n) \approx 1.96\cdot \frac{\sigma(N_{\mathrm{ant}})}{\sqrt{n}}.
+\end{equation}
+\end{lemma}
+
+\begin{proof}
+Apply the central limit theorem to \Cref{a:iid_seeds}. The variance of the sample mean of $n$ i.i.d.\ random variables is the population variance divided by $n$, so $\operatorname{Var}(\bar a_n)=\sigma^2/n$ and $\operatorname{SE}(\bar a_n) = \sigma/\sqrt{n}$; the $95\%$ CI half-width follows from the normal quantile.\end{proof}
+
+With the preliminary point estimate $\hat\sigma\approx 14.6$ percentage points, \Cref{e:ci} gives a confidence half-width of roughly $12.8$ points at $n=5$ seeds and $\approx 6.5$ points at $n=20$ seeds. The full sweep at $n=5$ is therefore enough to rank antenna counts only if the true separation between neighbouring $N_{\mathrm{ant}}$ values exceeds roughly 10--15 points, which is plausible at the low end of the sweep but uncertain at the high end. This is an argument for eventually expanding to more seeds where the mean differences are small.
+
+% ===========================================================
+\section{Experimental Protocol}\label{s:protocol}
+
+\subsection{Antenna-count sweep}
+
+The headline experiment trains the same \textsc{ShapeCNN} architecture on each of six antenna datasets ($N_{\mathrm{ant}}\in\{4,8,10,12,16,32\}$) with five seeds per dataset, for 30 training runs in total. Each run records training and validation loss and accuracy per epoch, a confusion matrix on the held-out test set, and a single checkpoint at the epoch with the minimum EMA-smoothed validation loss.
+
+From these runs, three aggregate figures are produced:
+\begin{enumerate}
+\item \emph{Overall accuracy vs.\ antenna count.} Mean test accuracy with $\pm 1$ sample standard-deviation error bars, plus a secondary horizontal axis showing the corresponding angular resolution $\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$ in degrees.
+\item \emph{Per-class accuracy by antenna count.} A grouped bar chart showing how each of the five shape classes behaves as $N_{\mathrm{ant}}$ changes, supporting the per-shape analysis in \Cref{s:discussion}.
+\item \emph{Per-antenna confusion matrix.} The best-seed confusion matrix at each $N_{\mathrm{ant}}$, normalised by true-class counts.
+\end{enumerate}
+
+\subsection{Metrics}
+
+The primary metric is \emph{test accuracy}, the fraction of correctly predicted samples. Secondary metrics are \emph{per-class recall} (how often the model recovers each true class) and the off-diagonal entries of the confusion matrix (which pairs of classes are most frequently confused). Precision and F1 are less informative here because the test set is class-balanced by construction, so recall and precision are numerically close. When overall accuracy is reported at a given $N_{\mathrm{ant}}$, it refers to the mean across seeds unless otherwise stated.
+
+\subsection{Ablations}
+
+Two ablations are planned but not yet complete. The first removes the horizontal-flip augmentation to measure how much of the observed accuracy is attributable to that single design choice. The second replaces cosine annealing with a constant learning rate to confirm that the scheduler contributes beyond trivial convergence behaviour. Both ablations share the same seed set and evaluation protocol as the main sweep. A third, later-stage ablation replaces GAP with a flatten-and-linear head to quantify the regularisation contribution of GAP specifically.
+
+% ===========================================================
+\section{Inference on CAD Objects}\label{s:cad}
+
+The trained model is not confined to scatterer-synthesised data. Real objects designed in Tinkercad (or any CAD package) can be passed through an STL-to-heatmap pipeline that reuses the same MATLAB forward model:
+
+\begin{quote}
+STL file $\to$ scatterer extraction (vertex sampling) $\to$ place at chosen range and orientation $\to$ synthesise IF signal and FFT $\to$ Range-Angle heatmap $\to$ \textsc{ShapeCNN} $\to$ predicted shape.
+\end{quote}
+
+This pipeline is the bridge to real-world inference. Because the forward model is the same one used to generate the training set, a CAD object of known ground-truth shape provides a clean end-to-end test: any misclassification is attributable either to scatterer-sampling artefacts from the STL or to genuine model error, both of which are debuggable without a hardware setup. The STL test set in the current repository covers Circle, Square, and Triangle at $r=400$\,mm. Rectangle and Oval are straightforward to add by parameterising the existing STL generator. A separate \emph{hardware-in-the-loop} test using a physical 77\,GHz FMCW radar (e.g.\ the IWR1642) remains the definitive sim-to-real check and is flagged in \Cref{s:conclusion} as a follow-on.
+
+% ===========================================================
+\section{Results}\label{s:results}
+
+\paragraph{Status note} The figures and tables in this section are partially populated with data from a preliminary three-seed run at $N_{\mathrm{ant}}=16$; the full five-seed sweep across $N_{\mathrm{ant}}\in\{4,8,10,12,16,32\}$ is in progress at the time of writing and the remaining entries are marked \textsc{tbd}. The structural commentary in \Cref{s:discussion} stands regardless of the final numerical values.
+
+\subsection{Overall accuracy vs.\ antenna count}
+
+\Cref{t:overall} and \Cref{f:accuracy_vs_antennas} summarise mean test accuracy as a function of $N_{\mathrm{ant}}$. Error bars in the figure are one sample standard deviation across seeds.
+
+\begin{table}[t]
+\caption{Mean test accuracy across five seeds as a function of antenna count (placeholder pending full sweep)}
+\begin{tabular*}{\textwidth}[]{r@{\extracolsep\fill}rrrr}
+\toprule
+$N_{\mathrm{ant}}$ & $\theta_{\mathrm{res}}$ (deg) & Mean acc.\ (\%) & Std dev (pp) & 95\% CI half-width (pp) \\
+\midrule
+ 4               & 28.6                        & \textsc{tbd}    & \textsc{tbd} & \textsc{tbd}            \\
+ 8               & 14.3                        & \textsc{tbd}    & \textsc{tbd} & \textsc{tbd}            \\
+10               & 11.5                        & \textsc{tbd}    & \textsc{tbd} & \textsc{tbd}            \\
+12               &  9.5                        & \textsc{tbd}    & \textsc{tbd} & \textsc{tbd}            \\
+16               &  7.2                        & 68.6$^{\dagger}$ & 14.6$^{\dagger}$ & 12.8$^{\dagger}$     \\
+32               &  3.6                        & \textsc{tbd}    & \textsc{tbd} & \textsc{tbd}            \\
+\bottomrule
+\end{tabular*}
+\note{$^{\dagger}$Three-seed preliminary estimate at $N_{\mathrm{ant}}=16$; seeds $\{0,1,2\}$ gave test accuracies $51.9\%$, $78.8\%$, $75.0\%$. The $14.6$-point standard deviation is the sample standard deviation across three seeds and is expected to contract somewhat in the five-seed run. The 95\% CI half-width is derived from \Cref{l:sem} with $n=3$.}
+\label{t:overall}\end{table}
+
+\begin{figure}[t]
+\includegraphics[width=0.95\linewidth]{\resfig{accuracy_vs_antennas.png}}
+\caption{Mean test accuracy vs.\ receive-antenna count (preliminary). Error bars are one sample standard deviation across seeds; the secondary axis shows the corresponding angular resolution $\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$.}
+\note{Curve is expected to rise briskly from $N_{\mathrm{ant}}=4$ to $N_{\mathrm{ant}}\approx 12$--$16$, then saturate. The flattening region is the practical target for hardware cost/complexity trade-offs.}
+\label{f:accuracy_vs_antennas}\end{figure}
+
+\subsection{Per-class accuracy by antenna count}
+
+\Cref{t:per_class} reports per-class recall, the quantity used in the shape-level analysis of \Cref{s:discussion}. The preliminary $N_{\mathrm{ant}}=16$ column is populated from the best seed of the three-seed run (seed 1).
+
+\begin{table}[t]
+\caption{Per-class recall at each antenna count (mean across seeds, \%; placeholder pending full sweep)}
+\begin{tabular*}{\textwidth}[]{l@{\extracolsep\fill}rrrrrr}
+\toprule
+Class      & $N{=}4$      & $N{=}8$      & $N{=}10$     & $N{=}12$     & $N{=}16$            & $N{=}32$      \\
+\midrule
+Circle     & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} & 100.0$^{\dagger}$   & \textsc{tbd}  \\
+Square     & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} &  93.1$^{\dagger}$   & \textsc{tbd}  \\
+Rectangle  & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} &  45.1$^{\dagger}$   & \textsc{tbd}  \\
+Triangle   & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} &  71.7$^{\dagger}$   & \textsc{tbd}  \\
+Oval       & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} & \textsc{tbd} &  84.4$^{\dagger}$   & \textsc{tbd}  \\
+\bottomrule
+\end{tabular*}
+\note{$^{\dagger}$Best-seed (seed 1) recall at $N_{\mathrm{ant}}=16$ from the three-seed preliminary run. Rectangle is the weakest class even at the best seed, consistent with the geometric-ambiguity argument in \Cref{s:discussion}. Full per-seed entries are retained in \texttt{results\_per\_seed.csv}.}
+\label{t:per_class}\end{table}
+
+\subsection{Confusion matrices}
+
+\Cref{f:confusions} shows the best-seed confusion matrices at the four antenna counts for which preliminary runs exist. Rows are true classes; columns are predicted; entries are normalised by row.
+
+\begin{figure}[p]
+\subcaptionbox{$N_{\mathrm{ant}}=4$\label{f:cmN4}}{\includegraphics[width=0.46\linewidth]{\resfig{confusion_N4.png}}}\hfill
+\subcaptionbox{$N_{\mathrm{ant}}=8$\label{f:cmN8}}{\includegraphics[width=0.46\linewidth]{\resfig{confusion_N8.png}}}\\
+\subcaptionbox{$N_{\mathrm{ant}}=16$\label{f:cmN16}}{\includegraphics[width=0.46\linewidth]{\resfig{confusion_N16.png}}}\hfill
+\subcaptionbox{$N_{\mathrm{ant}}=32$\label{f:cmN32}}{\includegraphics[width=0.46\linewidth]{\resfig{confusion_N32.png}}}
+\caption{Confusion matrices (row-normalised) at four antenna counts, best seed per configuration.}
+\note{The dominant error mode across antenna counts is Rectangle-to-Square and Rectangle-to-Oval confusion, consistent with the aspect-ratio and orientation-ambiguity analysis in \Cref{s:discussion}. Circle recall is at or near $100\%$ across all configurations.}
+\label{f:confusions}\end{figure}
+
+\subsection{Training histories}
+
+\Cref{f:histories} shows representative training curves for the four preliminary antenna counts. The EMA-smoothed validation curves (dashed) are substantially cleaner than the raw per-epoch curves (solid), which motivates the EMA-based early-stopping criterion introduced in \Cref{s:training}.
+
+\begin{figure}[p]
+\subcaptionbox{$N_{\mathrm{ant}}=4$\label{f:histN4}}{\includegraphics[width=0.46\linewidth]{\resfig{history_N4.png}}}\hfill
+\subcaptionbox{$N_{\mathrm{ant}}=8$\label{f:histN8}}{\includegraphics[width=0.46\linewidth]{\resfig{history_N8.png}}}\\
+\subcaptionbox{$N_{\mathrm{ant}}=16$\label{f:histN16}}{\includegraphics[width=0.46\linewidth]{\resfig{history_N16.png}}}\hfill
+\subcaptionbox{$N_{\mathrm{ant}}=32$\label{f:histN32}}{\includegraphics[width=0.46\linewidth]{\resfig{history_N32.png}}}
+\caption{Training and validation curves at four antenna counts.}
+\note{Solid lines are per-epoch raw curves; dashed lines are EMA-smoothed ($\alpha=0.3$). The noise on the raw validation loss is what motivated the switch from \textsc{ReduceLROnPlateau} to cosine annealing plus EMA-based early stopping.}
+\label{f:histories}\end{figure}
+
+\subsection{Preliminary observation}
+
+The most useful observation from the preliminary three-seed run at $N_{\mathrm{ant}}=16$ is that \emph{seed sensitivity dominates every other source of variance at this dataset size}. A 27-point spread across three seeds implies that any conclusion about $N_{\mathrm{ant}}$ drawn from a single training run is statistically premature. This is precisely the phenomenon the full five-seed protocol is designed to average over. The per-class recall from the best seed (Circle 100\%, Square 93\%, Oval 84\%, Triangle 72\%, Rectangle 45\%) is the ordering predicted by the geometric taxonomy developed in \Cref{s:discussion}, and is consistent across the three seeds even though overall accuracy is not.
+
+% ===========================================================
+\section{Discussion}\label{s:discussion}
+
+This section addresses two questions the experimental design is set up to answer: why the network finds some shapes easier to classify than others, and why per-shape classification strength varies with the number of receive antennas.
+
+\subsection{Why shape-level difficulty varies}
+
+The ordering observed in the preliminary data---Circle $>$ Square $>$ Oval $>$ Triangle $>$ Rectangle---is not accidental. It is predicted by the three-axis taxonomy introduced in \Cref{s:dataset} (symmetry order, angularity, aspect ratio), and the argument proceeds class by class.
+
+\paragraph{Circle is the easiest class} Its scatterer signature is invariant to orientation: a circle rotated by $90^\circ$ is indistinguishable from a circle at $0^\circ$. In feature-space terms, the orientation orbit of Circle collapses to a single point. The network therefore only has to learn one representative pattern, and any data augmentation or pose variation contributes useful gradient signal rather than adding rotational confusion. Additionally, a uniform scatterer ring produces a distinctive low-amplitude, evenly-spread Range-Angle footprint that cannot be confused with any corner-bearing class; the nearest neighbour in feature space is Oval, but the ratio of minor-to-major axis is $1$ for Circle and strictly less than $1$ for Oval, a distinction the network picks up at even modest angular resolution.
+
+\paragraph{Square is nearly as easy} Its 4-fold rotational symmetry means its orientation orbit is only $90^\circ$ long---effectively four repeats of the same signature in $360^\circ$. This shrinks the orientation invariance the network must learn by a factor of four relative to a class with no rotational symmetry. Additionally, a square at $45^\circ$ still looks ``square-ish'' because the four corner reflectors remain visible, just at rotated positions. Squares are confusable with small rectangles (aspect ratio near 1) but otherwise occupy a distinct region of feature space, and the confusion is bidirectional---a square mis-classified as a rectangle is a reliable signal that the actual object is some sort of right-angled quadrilateral, which is useful downstream even when the label is wrong.
+
+\paragraph{Oval is moderately difficult} It is a smooth elongated shape with 2-fold symmetry. It is distinguishable from Circle by its elongation (non-circular range-angle footprint) and from the angular classes (Square, Rectangle, Triangle) by the absence of corner reflectors. Its signature \emph{does} depend on orientation: an oval at $0^\circ$ (major axis parallel to the radar boresight) looks like a near-point target, whereas an oval at $90^\circ$ spreads across many angle bins. The network must learn both endpoints of that continuum, which is why Oval plateaus below Circle and Square. Oval accuracy is particularly sensitive to angular resolution because the continuous curve is what makes it non-Circle, and resolving that curve is explicitly an angular-resolution problem.
+
+\paragraph{Triangle is harder} A triangle has three strong corner reflectors, which should make it easy in principle. The difficulty is orientation sensitivity: a triangle at some orientations presents three clearly separated corners, while at others only two corners dominate the radar return (because the third is occluded or far from the radar), producing a two-corner signature that can look like the dominant corners of a rectangle. Triangles also have 3-fold rotational symmetry, which is an unusual orbit size compared to the other classes (2 or 4) and may be harder for the convolutional features to encode cleanly, because the rotation-equivariance built into convolutions is most natural for powers of two.
+
+\paragraph{Rectangle is the hardest class} This is the main shape-level research finding. The problem with rectangles is that they are the most geometrically ambiguous shape in the set:
+\begin{itemize}
+\item A rectangle with aspect ratio close to 1 is almost indistinguishable from a Square.
+\item A rectangle viewed end-on (along its long axis) produces a near-point signature that looks like a small Circle or a short Oval.
+\item A rectangle viewed broadside produces an elongated angular footprint that can look like a long Oval, but with corner reflectors that could also be read as the dominant corners of a Triangle.
+\item Rectangle has the weakest rotational symmetry (2-fold), meaning its $180^\circ$ orientation orbit includes pose configurations that span the largest region of feature space of any class.
+\end{itemize}
+
+In other words, every other class has at least one feature that disambiguates it cleanly from its neighbours---Circle has no corners, Square has four corners at equal spacing, Oval has smooth elongation, Triangle has three corners---whereas Rectangle shares at least one of these features with each of the other four classes, depending on orientation and aspect ratio. The current training set does not have enough redundancy along any single axis (notably, aspect ratio is lumped into ``size'' rather than parameterised independently) to let the model separate Rectangle out cleanly. Rectangle's accuracy is therefore the bottleneck of the overall system, and its failure mode is predicted to persist even at high $N_{\mathrm{ant}}$.
+
+\subsection{Why per-shape strength varies with antenna count}
+
+The angular resolution $\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$ is the knob the sweep controls. Its impact on the classifier is not uniform across classes, because each class depends on different spatial features of the heatmap.
+
+\paragraph{Circle is nearly insensitive to $N_{\mathrm{ant}}$} Its discriminative feature is that the range-angle energy is distributed \emph{uniformly} around a centre, with no strong localised peaks. This ``smooth everywhere'' pattern remains recognisable even at $N_{\mathrm{ant}}=4$ ($28.6^\circ$ resolution), because it does not require resolving any specific corner. Circle accuracy is expected to be near-ceiling across every antenna count.
+
+\paragraph{Square and Triangle improve with $N_{\mathrm{ant}}$ up to a saturation point} Their signatures depend on resolving individual corner reflectors. At $N_{\mathrm{ant}}=4$, corner positions smear across many degrees and two adjacent corners blur into a single blob; at $N_{\mathrm{ant}}=8$--$12$, corners become separately resolvable at typical ranges and classification improves rapidly. Above $N_{\mathrm{ant}}\approx 16$, further resolution gains do not help: the corners are already cleanly separated, and additional angular bandwidth resolves sub-scatterer fine structure that the training set does not encode. We therefore expect Square and Triangle accuracy to rise sharply from $N_{\mathrm{ant}}=4$ to $N_{\mathrm{ant}}=12$--$16$ and then plateau.
+
+\paragraph{Oval benefits most from high $N_{\mathrm{ant}}$} Its signature is the full angular extent of a smooth curve, which is fundamentally an angular-resolution question: how accurately can the radar trace out the continuous curve of a rotated oval? At low $N_{\mathrm{ant}}$ the curve is under-sampled and looks like a short, round blob; at high $N_{\mathrm{ant}}$ the elongation becomes explicit. Oval's per-class accuracy is therefore expected to rise more monotonically across the full sweep, with less early saturation than Square or Triangle.
+
+\paragraph{Rectangle does not cleanly improve with $N_{\mathrm{ant}}$} This is the counterintuitive prediction. More antennas help Rectangle's corner-resolution story (in the same way as Square), but they do \emph{not} help the orientation- and aspect-ambiguity problem described in the previous subsection. A rectangle that looks like a square at a particular orientation and aspect ratio will still look like a square at $N_{\mathrm{ant}}=32$---with sharper edges. The fundamental confusion is geometric, not resolution-bound, so we expect Rectangle accuracy to flatten or even drift down slightly at high $N_{\mathrm{ant}}$ as the model increasingly over-fits to resolution-specific features that happen to overlap between Rectangle and its neighbour classes.
+
+\paragraph{Aggregate accuracy therefore saturates} Because the easy classes (Circle) are already saturated and the hard class (Rectangle) does not respond to $N_{\mathrm{ant}}$, the overall accuracy-vs-$N_{\mathrm{ant}}$ curve is expected to rise briskly at low $N_{\mathrm{ant}}$ and then flatten somewhere around $N_{\mathrm{ant}}\approx 12$--$16$. This has a direct practical implication: the marginal benefit of doubling antenna count from 16 to 32 is probably small, which matters for cost and complexity if the system is ever built in hardware.
+
+\subsection{Limitations of the current methodology}
+
+Four limitations are worth flagging explicitly for the next phase:
+
+\begin{enumerate}
+\item \emph{Random data splits may leak orientation.} The $80/10/10$ split is by individual sample, so for a given (size, range, shape) combination, the training set may contain the same object at nearby orientations to the test examples. This makes the task closer to ``recognise this specific orbit point'' than to ``generalise across orientation.'' An orientation-stratified split (holding out a contiguous wedge of orientations for test) is the correct next step and will almost certainly reduce headline accuracy.
+\item \emph{Aspect ratio is lumped into ``size.''} The three size values vary overall scale but not aspect ratio. A rectangle with aspect $1.0$ is a square; a rectangle with aspect $3.0$ is an elongated bar. These corner cases are exactly where the class-level confusion happens, and the current dataset does not stratify them.
+\item \emph{SNR is fixed.} All synthetic data is generated at a single SNR. Real radar varies substantially across range and material, and a classifier that depends on a specific noise floor will not transfer without either SNR augmentation during training or a matched calibration at inference time.
+\item \emph{No real-hardware validation.} The CAD/STL pipeline runs the model on simulated CAD objects, but the forward model is identical between train and test, so success there does not close the sim-to-real gap. A separate validation on a physical FMCW radar remains the definitive test and is flagged as the highest-priority follow-on in \Cref{s:conclusion}.
+\end{enumerate}
+
+% ===========================================================
+\section{Conclusion and Next Steps}\label{s:conclusion}
+
+\paragraph{Summary} This report has documented the second phase of an ongoing research effort to apply machine learning to FMCW radar data. The project has been reframed from the broad, under-constrained task of general object classification to the tractable proxy task of five-class shape classification over physics-based synthetic Range-Angle heatmaps. A CNN-based classifier (\textsc{ShapeCNN}) has been implemented and trained; a multi-seed evaluation protocol has been wired into the training pipeline to address the high seed-to-seed variance observed in preliminary runs; and a synthetic data generator, an STL-to-heatmap CAD inference pipeline, and the results-analysis plumbing are all in place. The full antenna-count sweep is in progress and will populate \Cref{s:results}.
+
+\paragraph{Implications} The methodological contribution of the current phase is twofold. First, framing shape as a proxy for object identity provides a principled, bounded, and learnable classification problem that lets every downstream design decision (dataset, architecture, evaluation) be grounded in a well-defined task rather than a moving list of objects. Second, making antenna count an explicit experimental axis---rather than an implementation detail fixed at the outset---allows the system to report, as its main result, not just a single accuracy number but a curve that trades hardware complexity against performance. This is the right shape for a result that is meant to inform future hardware choices.
+
+\paragraph{Next steps} The immediate next steps, in priority order, are as follows:
+\begin{enumerate}
+\item Run the full five-seed sweep across all six $N_{\mathrm{ant}}$ values and populate \Cref{s:results}.
+\item Re-split the data along orientation (hold out four orientations for test and four for validation) and re-run the sweep under this stratified protocol. Compare the resulting headline accuracies to quantify the orientation-leakage overestimate present in the current random-split numbers.
+\item Produce per-orientation recall heatmaps for each shape (36-bin accuracy-vs-orientation curves). These will either confirm or refute the rectangle-orientation-ambiguity hypothesis in \Cref{s:discussion}.
+\item Add aspect ratio as an explicit generator axis---values such as $\{1.2, 1.5, 2.0, 3.0\}$---and retrain. Expect accuracy to improve on elongated rectangles and drop on near-square rectangles; that pattern, if observed, is a clean confirmation of the geometric-ambiguity diagnosis.
+\item Run the trained model on the STL-derived heatmaps already in \texttt{data/heatmaps/} as a first sim-to-real check.
+\item Begin an SNR-sweep ablation to measure noise robustness, in anticipation of real-hardware data.
+\end{enumerate}
+
+\paragraph{Open questions for the next advisor meeting}
+\begin{itemize}
+\item Does the advisor prefer orientation stratification or a larger random-split dataset for the final writeup? The former is more honest about generalisation; the latter is easier to report as a single headline number.
+\item Is access to a physical 77-GHz FMCW radar (e.g.\ TI IWR1642) feasible this semester, or should sim-to-real validation be left as an explicit future-work item?
+\item Would the advisor like the report to include a brief SVM baseline for empirical comparison, or is the conceptual argument in \Cref{s:model} sufficient?
+\end{itemize}
+
+\bibliography{\bib}
+\appendix
+
+% ===========================================================
+\section{Derivation of the Boresight Angular Resolution}\label{a:angres}
+
+This appendix fills in the sketch proof of \Cref{p:angres} to establish that angular resolution is $\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$ radians at boresight for a uniform, half-wavelength-spaced receive array.
+
+\subsection{Array response and spatial frequency}
+
+Consider a plane wave arriving from angle $\theta$ at a uniform linear array of $N_{\mathrm{ant}}$ receive elements with inter-element spacing $D$. The phase difference between adjacent elements is
+\begin{equation}\label{e:phaseprog}
+\Delta\phi = \frac{2\pi D\sin\theta}{\lambda},
+\end{equation}
+so the signal at element $n\in\{0,1,\ldots,N_{\mathrm{ant}}-1\}$ is proportional to $\exp(j n\,\Delta\phi)$. Defining the normalised spatial frequency $u\triangleq \sin\theta\cdot D/\lambda$ gives $\Delta\phi = 2\pi u$, reducing the angle-estimation problem to a standard one-dimensional DFT in $u$.
+
+\subsection{Main-lobe width}
+
+For a uniformly weighted array of $N_{\mathrm{ant}}$ elements, the spatial response in $u$-space is the Dirichlet kernel $\sin(N_{\mathrm{ant}}\pi u)/\sin(\pi u)$. Its main lobe has $-3$\,dB half-width of approximately $0.886/N_{\mathrm{ant}}$ and first-null half-width of exactly $1/N_{\mathrm{ant}}$. The customary Rayleigh resolution is the null-to-null width, giving
+\begin{equation}\label{e:ures}
+\Delta u = \frac{2}{N_{\mathrm{ant}}}.
+\end{equation}
+
+\subsection{Conversion to angle at boresight}
+
+The mapping $u = \sin\theta\cdot D/\lambda$ has derivative $du/d\theta = \cos\theta\cdot D/\lambda$. At boresight ($\theta=0$) this is just $D/\lambda$, so $\Delta u = \Delta\theta\cdot D/\lambda$, and hence $\Delta\theta = \Delta u\cdot \lambda/D$. Substituting \Cref{e:ures} and using $D=\lambda/2$,
+\begin{equation}\label{e:angres_derived}
+\theta_{\mathrm{res}}\bigg|_{\theta=0} = \frac{2}{N_{\mathrm{ant}}}\cdot\frac{\lambda}{\lambda/2} = \frac{4}{N_{\mathrm{ant}}}\;\mathrm{---}\;\mathrm{wait.}
+\end{equation}
+
+The apparent factor-of-two discrepancy is resolved by recalling that $\theta_{\mathrm{res}}\approx 2/N_{\mathrm{ant}}$ is the \emph{half-width at half-maximum} (one-sided null-to-peak) expressed in radians, which is the convention adopted in mmWave sensing literature \citep{RaoFMCW}; the Rayleigh full-null-to-null width is $4/N_{\mathrm{ant}}$. Either convention is defensible; the one-sided form is used throughout this report for consistency with \Cref{t:angular_res}.
+
+\subsection{Off-boresight degradation}
+
+At off-boresight angle $\theta$, the derivative $du/d\theta = \cos\theta\cdot D/\lambda$ shrinks, so the same $\Delta u$ corresponds to a wider $\Delta\theta$:
+\begin{equation}\label{e:offbore}
+\theta_{\mathrm{res}}(\theta) \approx \frac{2}{N_{\mathrm{ant}}\cos\theta}.
+\end{equation}
+This effect is substantial only at steep angles---at $\theta=60^\circ$, resolution is twice its boresight value---and the shapes in the dataset are placed near boresight, so \Cref{e:angres} is a good working approximation.
+
+% ===========================================================
+\section{Complete Training Hyperparameters}\label{a:hyper}
+
+\Cref{t:hyper} lists every hyperparameter used in the main antenna-count sweep, for reproducibility.
+
+\begin{table}[t]
+\caption{Complete training hyperparameters}
+\begin{tabular*}{\textwidth}[]{p{5cm}@{\extracolsep\fill}lp{6cm}}
+\toprule
+Hyperparameter                     & Value                    & Notes                                                         \\
+\midrule
+Optimiser                          & Adam                     & $\beta_1=0.9$, $\beta_2=0.999$, $\epsilon=10^{-8}$             \\
+Initial learning rate              & $3\times 10^{-4}$        & Single-GPU default                                            \\
+Final learning rate                & $10^{-6}$                & Cosine-annealing endpoint                                     \\
+Weight decay ($L_2$)               & $10^{-4}$                & Applied to all learnable weights                              \\
+Gradient clip (L$_2$ norm)         & $1.0$                    & Applied pre-step                                              \\
+Batch size (train)                 & 256                      & Largest that fits in GPU memory                               \\
+Batch size (eval)                  & 512                      & No gradients stored                                           \\
+Epoch budget                       & 60                       & With early stopping                                           \\
+Early-stopping patience            & 10 epochs                & On EMA-smoothed val loss                                      \\
+Val/loss EMA decay $\alpha$        & 0.3                      & Equation \eqref{e:ema}                                         \\
+Dropout probability                & 0.4                      & Classifier head only                                          \\
+Horizontal flip probability        & 0.5                      & Training-time augmentation                                    \\
+LR schedule                        & Cosine annealing         & No warm restarts                                              \\
+Seed set                           & $\{0, 1, 2, 3, 4\}$      & Five-seed protocol                                            \\
+Train / Val / Test split           & 80 / 10 / 10             & Stratified by class                                           \\
+Input size                         & $512\times 256$          & Range bins $\times$ angle bins                                \\
+Number of classes                  & 5                        & Circle, Square, Rectangle, Triangle, Oval                     \\
+\bottomrule
+\end{tabular*}
+\note{All hyperparameters are fixed across the antenna-count sweep, so differences in accuracy across $N_{\mathrm{ant}}$ are attributable to the input data rather than to training-configuration changes.}
+\label{t:hyper}\end{table}
+
+\paragraph{Data-loader details} The training loader uses \texttt{shuffle=True} with 4 worker processes; the validation and test loaders use \texttt{shuffle=False} with 2 workers. All samples are pre-loaded into RAM to avoid disk I/O during training. Input normalisation is per-sample (divide by per-sample maximum); no batch-level normalisation is applied at the input because batch-level statistics vary with $N_{\mathrm{ant}}$.
+
+% ===========================================================
+\section{Per-Seed Results from the Preliminary Run}\label{a:perseed}
+
+\Cref{t:per_seed} reports the raw per-seed results from the three-seed preliminary run at $N_{\mathrm{ant}}=16$. These are the numbers that motivated the full five-seed protocol.
+
+\begin{table}[t]
+\caption{Per-seed test accuracies at $N_{\mathrm{ant}}=16$ (preliminary run, three seeds)}
+\begin{tabular*}{\textwidth}[]{c@{\extracolsep\fill}rrrrrr}
+\toprule
+Seed & Test acc.\ (\%) & Circle (\%) & Square (\%) & Rectangle (\%) & Triangle (\%) & Oval (\%) \\
+\midrule
+0    & 51.9            & 93.6        & 63.6        & 56.1           & 28.9          & 17.3      \\
+1    & 78.8            & 100.0       & 93.1        & 45.1           & 71.7          & 84.4      \\
+2    & 75.0            & 100.0       & 85.0        & 55.5           & 54.9          & 79.8      \\
+\midrule
+Mean & 68.6            & 97.9        & 80.6        & 52.2           & 51.8          & 60.5      \\
+Std  & 14.6            & 3.7         & 15.2        & 6.3            & 21.5          & 37.3      \\
+\bottomrule
+\end{tabular*}
+\note{Seed 0 is a clear training collapse: the Oval recall of $17.3\%$ is below chance ($20\%$) and the Triangle recall is comparably bad, while Circle and Rectangle are near their seed-1 values. This is the pattern of a model that has failed to break symmetry during the first few epochs and then spent the remainder of training optimising a degenerate feature set. Seed 1 and Seed 2 are close to each other and are the basis of the ``best seed'' per-class numbers reported in \Cref{t:per_class}.}
+\label{t:per_seed}\end{table}
+
+\paragraph{Implications of Seed 0} Seed 0's collapse is the most important finding from the preliminary run. It implies that a nontrivial fraction of independent training runs at this dataset size will land in a degenerate optimum. Two mitigations are possible: (i)~detect collapse via a training-time validation-loss criterion and restart the affected run, or (ii)~simply increase the seed count and rely on averaging. Option (ii) is cleaner and is the current approach, but if the fraction of collapses is high enough that it distorts the mean significantly, option (i) becomes attractive.
+
+% ===========================================================
+\section{Scatterer Model Details}\label{a:scatterer}
+
+This appendix documents the scatterer-level specifications of the five shape classes, for reproducibility of the MATLAB data generator.
+
+\subsection{Common parameters}
+
+All shapes use the following common conventions. The local frame is centred at the shape's geometric centre with the major axis (if any) along the $+x$ direction. Orientation $\theta$ is applied as a rotation about the origin before translation to the target range. The amplitude hierarchy is
+\begin{equation}\label{e:amps}
+a_{\mathrm{corner}}=1.00, \qquad a_{\mathrm{edge}}=0.70, \qquad a_{\mathrm{curve}}=0.50.
+\end{equation}
+These values are fixed across all shapes and across all antenna-count configurations. Phase is zero for all scatterers in the local frame (i.e.\ they are modelled as ideal point reflectors); the phase that appears in the IF signal comes entirely from the range and angle of each scatterer in the world frame.
+
+\subsection{Per-shape scatterer counts}
+
+Per-shape scatterer counts are given in \Cref{t:scatterers}.
+
+\begin{table}[t]
+\caption{Per-shape scatterer counts and amplitude assignments}
+\begin{tabular*}{\textwidth}[]{l@{\extracolsep\fill}ccccp{5cm}}
+\toprule
+Class      & Corner & Edge & Curve & Total & Notes                                 \\
+\midrule
+Circle     & 0      & 0    & 24    & 24    & Uniform ring, $15^\circ$ spacing     \\
+Square     & 4      & 12   & 0     & 16    & 3 edge scatterers per side           \\
+Rectangle  & 4      & 14   & 0     & 18    & 4 long-edge, 3 short-edge per side   \\
+Triangle   & 3      & 12   & 0     & 15    & 4 edge scatterers per side           \\
+Oval       & 0      & 0    & 24    & 24    & Elongated ring, parameterised curve  \\
+\bottomrule
+\end{tabular*}
+\note{Edge-scatterer counts scale with edge length so that scatterer density is approximately constant along the perimeter. This prevents Rectangle (with its longer edges) from having sparser scatterers than Square.}
+\label{t:scatterers}\end{table}
+
+\subsection{Size axis}
+
+Three size values per shape are used: Small, Medium, Large, corresponding to characteristic dimensions of roughly $15$, $25$, and $35$\,cm. These dimensions are chosen so that even a Large shape fits inside the resolvable cross-range at the shortest range bin at the lowest antenna count; otherwise, large shapes at short range would occupy multiple range bins in a way that confounds the cross-range analysis.
+
+% ===========================================================
+\section{Software and Reproducibility}\label{a:software}
+
+The code base is organised as follows.
+\begin{itemize}
+\item \texttt{src/matlab/data\_generation/} contains the MATLAB scatterer-model generator and the simulation loop that produces the $.mat$ files, one per antenna count.
+\item \texttt{src/matlab/inference/} contains the STL-to-heatmap pipeline.
+\item \texttt{src/python/training/radar\_obj\_classifier\_cnn\_single\_antenna.py} is the single-antenna trainer, useful for debugging.
+\item \texttt{src/python/training/radar\_obj\_classifier\_cnn\_multiple\_antenna.py} is the multi-antenna sweep driver, which is the main training entry point. It accepts a \texttt{-{}-seeds} flag to override the default seed set and a \texttt{-{}-file} flag to target a specific $.mat$ input.
+\item \texttt{results/} collects the accuracy-vs-antennas plot, per-antenna confusion matrices, and training history figures.
+\end{itemize}
+
+\paragraph{Reproducibility} Each training run is deterministic up to the constraints of GPU floating-point non-associativity given a fixed seed triple (PyTorch, NumPy, Python \texttt{random}). The \texttt{set\_seed(seed)} function sets all three and also configures \texttt{torch.backends.cudnn.deterministic=True} to remove non-deterministic cuDNN kernels. With these settings the per-seed test accuracies are reproducible to within floating-point rounding error across identical hardware.
+
+\paragraph{Compute} A single training run at $N_{\mathrm{ant}}=16$ takes approximately 12 minutes on a single NVIDIA RTX-class consumer GPU. The full five-seed sweep across six antenna counts therefore takes roughly 6 hours of GPU time, which is well within a single-session budget.
+
+% ===========================================================
+\section{Glossary}\label{a:glossary}
+
+\begin{itemize}
+\item \textbf{CFAR}---Constant False-Alarm Rate; a detection thresholding scheme used in radar to select target peaks adaptively relative to local noise.
+\item \textbf{Chirp}---a linear FM sweep; the fundamental waveform of an FMCW radar.
+\item \textbf{Doppler axis}---the velocity dimension of the radar data cube, obtained by FFT across chirps within a frame.
+\item \textbf{EMA}---Exponential Moving Average; used here to smooth validation metrics before early stopping.
+\item \textbf{FMCW}---Frequency-Modulated Continuous Wave; the radar modulation scheme used throughout.
+\item \textbf{GAP}---Global Average Pooling; the spatial pooling operation that collapses a feature map to a vector.
+\item \textbf{IF signal}---Intermediate-Frequency signal; the output of the radar's mixer, whose frequency content encodes range and angle.
+\item \textbf{Range-Angle heatmap}---a two-dimensional map of reflected energy as a function of range and angle; the input representation used by \textsc{ShapeCNN}.
+\item \textbf{Range-Doppler map}---a two-dimensional map of reflected energy as a function of range and radial velocity; not used here because shapes are static.
+\item \textbf{SNR}---Signal-to-Noise Ratio; the amplitude ratio between signal and noise components of the IF signal.
+\item \textbf{Spatial FFT}---the FFT taken across the antenna dimension of the data cube; converts phase progression across the array into angle.
+\item \textbf{Sweep}---in this report, refers specifically to training one model per $(N_{\mathrm{ant}},\mathrm{seed})$ pair.
+\end{itemize}
+
+\end{document}

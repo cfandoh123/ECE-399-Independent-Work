@@ -78,6 +78,8 @@ CLASS_COLORS = ['#3498DB', '#E74C3C', '#2ECC71', '#9B59B6', '#F39C12']
 ANTENNA_EXPERIMENTS = [
     {'n_ant':  4, 'file': 'radar_shapes_N4.mat'},
     {'n_ant':  8, 'file': 'radar_shapes_N8.mat'},
+    {'n_ant': 10, 'file': 'radar_shapes_N10.mat'},
+    {'n_ant': 12, 'file': 'radar_shapes_N12.mat'},
     {'n_ant': 16, 'file': 'radar_shapes_N16.mat'},
     {'n_ant': 32, 'file': 'radar_shapes_N32.mat'},
 ]
@@ -87,17 +89,18 @@ ANTENNA_EXPERIMENTS = [
 #  SECTION 1: LOAD DATASET
 # ============================================================
 
-def load_dataset(filepath, batch_size=256):
+def load_tensors(filepath):
     """
-    Load one MATLAB dataset file and return DataLoaders.
+    Load one MATLAB dataset file once and return the raw tensors plus
+    metadata. This is split from loader construction so that the same
+    tensors can be reused across seeds without re-reading the .mat file.
 
     Args:
-        filepath   : path to .mat file
-        batch_size : samples per training batch
+        filepath : path to .mat file
 
     Returns:
-        train_dl, val_dl, test_dl : PyTorch DataLoaders
-        meta                      : dict with n_ant and filepath
+        tensors : dict with keys 'X_tr','Y_tr','X_vl','Y_vl','X_te','Y_te'
+        meta    : dict with n_ant, filepath, and set sizes
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(
@@ -164,13 +167,11 @@ def load_dataset(filepath, batch_size=256):
         bar = 'x' * (n // 10)
         print(f"    {i+1}. {name:12s}: {n:4d}  {bar}")
 
-    train_dl = DataLoader(TensorDataset(X_tr, Y_tr),
-                          batch_size=batch_size,
-                          shuffle=True, drop_last=True)
-    val_dl   = DataLoader(TensorDataset(X_vl, Y_vl),
-                          batch_size=512, shuffle=False)
-    test_dl  = DataLoader(TensorDataset(X_te, Y_te),
-                          batch_size=512, shuffle=False)
+    tensors = {
+        'X_tr': X_tr, 'Y_tr': Y_tr,
+        'X_vl': X_vl, 'Y_vl': Y_vl,
+        'X_te': X_te, 'Y_te': Y_te,
+    }
 
     meta = {
         'n_ant'   : n_ant,
@@ -180,6 +181,43 @@ def load_dataset(filepath, batch_size=256):
         'n_test'  : len(X_te),
     }
 
+    return tensors, meta
+
+
+def make_loaders(tensors, batch_size=256, seed=0):
+    """
+    Build DataLoaders from pre-loaded tensors. The train loader's
+    shuffle is seeded via a torch.Generator so each seed sees a
+    different batch order while the underlying data is shared.
+    """
+    gen = torch.Generator()
+    gen.manual_seed(int(seed))
+
+    train_dl = DataLoader(
+        TensorDataset(tensors['X_tr'], tensors['Y_tr']),
+        batch_size=batch_size,
+        shuffle=True, drop_last=True,
+        generator=gen,
+    )
+    val_dl = DataLoader(
+        TensorDataset(tensors['X_vl'], tensors['Y_vl']),
+        batch_size=512, shuffle=False,
+    )
+    test_dl = DataLoader(
+        TensorDataset(tensors['X_te'], tensors['Y_te']),
+        batch_size=512, shuffle=False,
+    )
+    return train_dl, val_dl, test_dl
+
+
+def load_dataset(filepath, batch_size=256, seed=0):
+    """
+    Backwards-compatible helper: load + build loaders in one call.
+    New code should prefer load_tensors + make_loaders so that the
+    .mat file is read once per N_ant instead of once per seed.
+    """
+    tensors, meta = load_tensors(filepath)
+    train_dl, val_dl, test_dl = make_loaders(tensors, batch_size=batch_size, seed=seed)
     return train_dl, val_dl, test_dl, meta
 
 
@@ -863,14 +901,18 @@ def run_antenna_experiments(experiments, seeds=None):
         best_model      = None
         best_preds      = None
         best_labels     = None
-        meta            = None
+
+        # Load the .mat file ONCE for this N_ant; reuse across seeds.
+        # Only the batch-shuffle RNG and the model init vary per seed.
+        tensors, meta = load_tensors(filepath)
 
         for seed in seeds:
             print(f"\n  ---- seed {seed} ----")
             set_seed(seed)
 
-            # Reload per seed so DataLoader shuffle also varies
-            train_dl, val_dl, test_dl, meta = load_dataset(filepath)
+            # Rebuild loaders per seed so the train shuffle order
+            # varies; underlying tensors are shared (no disk I/O).
+            train_dl, val_dl, test_dl = make_loaders(tensors, seed=seed)
 
             model  = ShapeCNN(n_classes=N_CLASSES)
             params = sum(p.numel() for p in model.parameters())
@@ -1126,6 +1168,13 @@ if __name__ == '__main__':
         help='Comma-separated list of RNG seeds, e.g. "0,1,2". '
              'Defaults to the module-level SEEDS list.'
     )
+    parser.add_argument(
+        '--N_ant', type=str, default=None, metavar='LIST',
+        help='Comma-separated list of antenna counts to run, e.g. '
+             '"10,12,16,32". Defaults to every entry in '
+             'ANTENNA_EXPERIMENTS. Use this to skip already-finished '
+             'runs without editing the experiment table.'
+    )
     args = parser.parse_args()
 
     # Parse --seeds override
@@ -1139,6 +1188,22 @@ if __name__ == '__main__':
     else:
         seeds_override = SEEDS
 
+    # Parse --N_ant filter
+    if args.N_ant is not None:
+        try:
+            n_ant_filter = {int(s.strip()) for s in args.N_ant.split(',') if s.strip()}
+        except ValueError:
+            raise SystemExit(f"Invalid --N_ant value: {args.N_ant!r}")
+        experiments = [e for e in ANTENNA_EXPERIMENTS if e['n_ant'] in n_ant_filter]
+        missing = n_ant_filter - {e['n_ant'] for e in experiments}
+        if missing:
+            print(f"Warning: --N_ant values not in ANTENNA_EXPERIMENTS: "
+                  f"{sorted(missing)}")
+        if not experiments:
+            raise SystemExit("--N_ant filtered out every experiment")
+    else:
+        experiments = ANTENNA_EXPERIMENTS
+
     if args.single:
         run_single(args.single, seeds=seeds_override)
 
@@ -1149,11 +1214,11 @@ if __name__ == '__main__':
         print("="*62)
 
         print("\nFiles expected:")
-        for exp in ANTENNA_EXPERIMENTS:
+        for exp in experiments:
             status = 'found' if os.path.exists(exp['file']) else 'MISSING'
             print(f"  N={exp['n_ant']:2d}  {exp['file']}  [{status}]")
 
-        results = run_antenna_experiments(ANTENNA_EXPERIMENTS,
+        results = run_antenna_experiments(experiments,
                                            seeds=seeds_override)
 
         if len(results) == 0:

@@ -1,0 +1,99 @@
+\begin{thebibliography}{15}
+\newcommand{\enquote}[1]{``#1''}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+
+\bibitem[{Cortes and Vapnik(1995)}]{Cortes95}
+Cortes, Corinna and Vladimir Vapnik. 1995.
+\newblock \enquote{Support-Vector Networks.}
+\newblock pp. 273--297.
+
+\bibitem[{Hu(1962)}]{Hu62}
+Hu, Ming-Kuei. 1962.
+\newblock \enquote{Visual Pattern Recognition by Moment Invariants.}
+\newblock \emph{IRE Transactions on Information Theory} 8~(2): 179--187.
+
+\bibitem[{Ioffe and Szegedy(2015)}]{Ioffe15}
+Ioffe, Sergey and Christian Szegedy. 2015.
+\newblock \enquote{Batch Normalization: Accelerating Deep Network Training by
+  Reducing Internal Covariate Shift.}
+\newblock In \emph{International Conference on Machine Learning}, pp. 448--456.
+
+\bibitem[{Kingma and Ba(2015)}]{Kingma15}
+Kingma, Diederik~P. and Jimmy Ba. 2015.
+\newblock \enquote{{Adam}: A Method for Stochastic Optimization.}
+\newblock In \emph{International Conference on Learning Representations}.
+
+\bibitem[{Krizhevsky, Sutskever, and Hinton(2012)}]{Krizhevsky12}
+Krizhevsky, Alex, Ilya Sutskever, and Geoffrey~E. Hinton. 2012.
+\newblock \enquote{{ImageNet} Classification with Deep Convolutional Neural
+  Networks.}
+\newblock \emph{Advances in Neural Information Processing Systems} 25:
+  1097--1105.
+
+\bibitem[{LeCun et~al.(1989)LeCun, Boser, Denker, Henderson, Howard, Hubbard,
+  and Jackel}]{LeCun89}
+LeCun, Yann, Bernhard Boser, John~S. Denker, Donnie Henderson, Richard~E.
+  Howard, Wayne Hubbard, and Lawrence~D. Jackel. 1989.
+\newblock \enquote{Backpropagation Applied to Handwritten Zip Code
+  Recognition.}
+\newblock \emph{Neural Computation} 1~(4): 541--551.
+
+\bibitem[{Lien et~al.(2016)Lien, Gillian, Karagozler, Amihood, Schwesig, Olson,
+  Raja, and Poupyrev}]{Lien16}
+Lien, Jaime, Nicholas Gillian, M.~Emre Karagozler, Patrick Amihood, Carsten
+  Schwesig, Erik Olson, Hakim Raja, and Ivan Poupyrev. 2016.
+\newblock \enquote{{Soli}: Ubiquitous Gesture Sensing with Millimeter Wave
+  Radar.}
+\newblock In \emph{ACM Transactions on Graphics}, vol.~35.
+
+\bibitem[{Lin, Chen, and Yan(2014)}]{Lin14}
+Lin, Min, Qiang Chen, and Shuicheng Yan. 2014.
+\newblock \enquote{Network in Network.}
+\newblock In \emph{International Conference on Learning Representations}.
+
+\bibitem[{Loshchilov and Hutter(2017)}]{Loshchilov17}
+Loshchilov, Ilya and Frank Hutter. 2017.
+\newblock \enquote{{SGDR}: Stochastic Gradient Descent with Warm Restarts.}
+\newblock In \emph{International Conference on Learning Representations}.
+
+\bibitem[{Paszke et~al.(2019)}]{Paszke19}
+Paszke, Adam et~al. 2019.
+\newblock \enquote{{PyTorch}: An Imperative Style, High-Performance Deep
+  Learning Library.}
+\newblock In \emph{Advances in Neural Information Processing Systems}, vol.~32.
+
+\bibitem[{Qi et~al.(2017)Qi, Su, Mo, and Guibas}]{Qi17}
+Qi, Charles~R., Hao Su, Kaichun Mo, and Leonidas~J. Guibas. 2017.
+\newblock \enquote{{PointNet}: Deep Learning on Point Sets for 3{D}
+  Classification and Segmentation.}
+\newblock In \emph{IEEE Conference on Computer Vision and Pattern Recognition},
+  pp. 652--660.
+
+\bibitem[{Ramasubramanian(2017)}]{Ramasubramanian17}
+Ramasubramanian, Karthik. 2017.
+\newblock \enquote{Using a Complex-Baseband Architecture in {FMCW} Radar
+  Systems.}
+\newblock  SPYY007, Texas Instruments.
+\newblock \url{https://www.ti.com/lit/an/spyy007/spyy007.pdf}.
+
+\bibitem[{Rao(2017)}]{RaoFMCW}
+Rao, Sandeep. 2017.
+\newblock \enquote{Introduction to {mmWave} Sensing: {FMCW} Radars.}
+\newblock , Texas Instruments.
+\newblock \url{https://training.ti.com/intro-mmwave-sensing-fmcw-radars}.
+
+\bibitem[{Richards, Scheer, and Holm(2014)}]{Richards14}
+Richards, Mark~A., James~A. Scheer, and William~A. Holm. 2014.
+\newblock \emph{Principles of Modern Radar: Basic Principles}.
+\newblock SciTech Publishing.
+
+\bibitem[{Srivastava et~al.(2014)Srivastava, Hinton, Krizhevsky, Sutskever, and
+  Salakhutdinov}]{Srivastava14}
+Srivastava, Nitish, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, and
+  Ruslan Salakhutdinov. 2014.
+\newblock \enquote{Dropout: A Simple Way to Prevent Neural Networks from
+  Overfitting.}
+\newblock \emph{Journal of Machine Learning Research} 15~(1): 1929--1958.
+
+\end{thebibliography}
