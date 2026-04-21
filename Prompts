@@ -1,0 +1,16 @@
+I was able to successfully run the command below.
+
+```notebook-python
+!python radar_obj_classifier_cnn_multiple_antenna.py --seeds 0,1,2
+
+```
+
+I couldn't ran all seeds because I don't have enough resources and time. I've attached all results to IW/results directory. 
+Look through all the files carefully and comment/make critical observations. 
+We're ending the implementation phase here. The next steps is more about research. We want to answer questions like:
+
+* Why did we choose CNN architecture for our model?
+* Why does the model perform better on some shapes and not on others?
+* Why does varying the number of antennas affect the strength of our model?
+* Produce a script that would allow me to view the heatmaps of certain shapes and verify your hypothesis of why their classifications may be failing
+* Have we done testing? If not, how do I do that? I know we have trained and validated the model
