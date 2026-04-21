@@ -188,18 +188,36 @@ class ShapeCNN(nn.Module):
 #  SECTION 3: TRAINING
 # ============================================================
 
-def train(model, train_dl, val_dl, n_epochs=40, lr=1e-3, patience=8):
-    """Train with Adam, CrossEntropy, ReduceLROnPlateau, early stopping."""
+def train(model, train_dl, val_dl, n_epochs=40, lr=1e-3,
+          patience=20, warmup_epochs=3):
+    """Train with Adam + CrossEntropy + linear-warmup + cosine decay
+    + EMA-smoothed early stopping.
+
+    Patience is set high (20) because the EMA val loss in this setup
+    transiently spikes mid-training before recovering; a low patience
+    kills runs before they converge. A 3-epoch linear warmup reduces
+    those early-epoch spikes by letting BatchNorm stats settle before
+    the LR hits its target value.
+    """
 
     model     = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
 
-    # Cosine annealing — deterministic LR decay over n_epochs.
-    # Replaces ReduceLROnPlateau, which reacted to noisy val loss
-    # and introduced its own instability.
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=n_epochs, eta_min=1e-6
+    # LR schedule: linear warmup for `warmup_epochs`, then cosine
+    # annealing down to 1e-6 over the remaining epochs.
+    warmup = optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.1, end_factor=1.0,
+        total_iters=max(warmup_epochs, 1),
+    )
+    cosine = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(n_epochs - warmup_epochs, 1),
+        eta_min=1e-6,
+    )
+    scheduler = optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup, cosine],
+        milestones=[warmup_epochs],
     )
 
     history = {
@@ -645,9 +663,10 @@ if __name__ == '__main__':
 
         model, history = train(
             model, train_dl, val_dl,
-            n_epochs = 40,
-            lr       = 1e-3,
-            patience = 8,
+            n_epochs      = 40,
+            lr            = 1e-3,
+            patience      = 20,
+            warmup_epochs = 3,
         )
 
         acc, preds, labels = evaluate(model, test_dl)

@@ -292,32 +292,52 @@ class ShapeCNN(nn.Module):
 # ============================================================
 
 def train_model(model, train_dl, val_dl, n_ant,
-                n_epochs=40, lr=1e-3, patience=8):
+                n_epochs=40, lr=1e-3, patience=20, warmup_epochs=3):
     """
     Train one model on one dataset.
 
     Args:
-        model    : ShapeCNN instance (freshly initialised)
-        train_dl : training DataLoader
-        val_dl   : validation DataLoader
-        n_ant    : antenna count (used for print labels only)
-        n_epochs : max training epochs
-        lr       : initial learning rate
-        patience : early stopping patience in epochs
+        model         : ShapeCNN instance (freshly initialised)
+        train_dl      : training DataLoader
+        val_dl        : validation DataLoader
+        n_ant         : antenna count (used for print labels only)
+        n_epochs      : max training epochs
+        lr            : target learning rate (after warmup)
+        patience      : early stopping patience in epochs
+        warmup_epochs : linear warmup length (0.1*lr -> lr)
 
     Returns:
         model   : best weights restored
         history : loss and accuracy per epoch
+
+    Notes:
+        Patience is set high (20) because the EMA val loss in this
+        setup transiently spikes 2-3x mid-training before recovering,
+        especially at high N_ant. A 3-epoch linear warmup suppresses
+        the worst of those spikes by letting BatchNorm statistics
+        settle before the LR hits its target.
     """
     model     = model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(),
                            lr=lr, weight_decay=1e-4)
-    # Cosine annealing — deterministic LR decay over n_epochs.
-    # Replaces ReduceLROnPlateau, which reacted to noisy val loss
-    # and introduced its own instability.
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=n_epochs, eta_min=1e-6
+    # LR schedule: linear warmup for `warmup_epochs`, then cosine
+    # annealing from lr down to 1e-6 over the remaining epochs.
+    # Warmup reduces the early-epoch val-loss spikes caused by
+    # BatchNorm running-stat instability, which had been triggering
+    # premature early-stopping at N_ant >= 10.
+    warmup = optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.1, end_factor=1.0,
+        total_iters=max(warmup_epochs, 1),
+    )
+    cosine = optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=max(n_epochs - warmup_epochs, 1),
+        eta_min=1e-6,
+    )
+    scheduler = optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup, cosine],
+        milestones=[warmup_epochs],
     )
 
     history = {
@@ -921,10 +941,11 @@ def run_antenna_experiments(experiments, seeds=None):
 
             model, history = train_model(
                 model, train_dl, val_dl,
-                n_ant    = n_ant,
-                n_epochs = 60,
-                lr       = 3e-4,
-                patience = 10,
+                n_ant         = n_ant,
+                n_epochs      = 60,
+                lr            = 3e-4,
+                patience      = 20,
+                warmup_epochs = 3,
             )
 
             acc, preds, labels = evaluate_model(model, test_dl, n_ant)
