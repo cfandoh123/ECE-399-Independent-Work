@@ -137,13 +137,3 @@ streamlit run src/python/ui/streamlit_radar.py
 
 ---
 
-## Notes on the reorganization
-
-- `generate_RA.m` lives next to `radar_stl_to_heatmap.m` in
-  `src/matlab/inference/` because that script documents it as a
-  same-folder dependency. The data-generation scripts have their own
-  inline copy of the same function, so they are self-contained.
-- All heatmap and model artifacts (`*.mat`, `.pt`, etc.) are expected in
-  `data/` and `results/` rather than next to source code.
-- `Archive/` contains prior experiments that are not part of the current
-  pipeline but are kept so earlier approaches can still be referenced.
