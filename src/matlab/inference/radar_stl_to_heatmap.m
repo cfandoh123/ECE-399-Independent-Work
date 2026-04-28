@@ -20,7 +20,7 @@ clear; clc; close all;
 %  SECTION 1: SETTINGS — change these for each shape
 %% =========================================================
 
-STL_FILE        = 'circle_400mm.stl';   % your exported STL file
+STL_FILE        = 'circle_10.stl';   % your exported STL file
 TRUE_SHAPE      = 'circle';             % for labelling only
 OBJ_RANGE       = 4.0;                  % metres from radar
 OBJ_ORIENTATION = 0;                    % degrees rotation

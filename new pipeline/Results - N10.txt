@@ -1,0 +1,496 @@
+Device: cuda
+
+
+Single-file mode: radar_shapes_N10.mat  |  seeds = [0, 1, 2, 3, 4]
+
+Loading: radar_shapes_N10.mat
+  N_ant  : 10
+  Train  : torch.Size([18140, 1, 256, 512])
+  Val    : torch.Size([3880, 1, 256, 512])
+  Test   : torch.Size([3900, 1, 256, 512])
+
+  Class distribution (train):
+    1. Circle      : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    2. Square      : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    3. Rectangle   : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    4. Triangle    : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    5. Oval        : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+##############################################################
+#  EXPERIMENT: N_ant = 10  |  seeds = [0, 1, 2, 3, 4]
+#  File      : radar_shapes_N10.mat
+##############################################################
+
+Loading: radar_shapes_N10.mat
+  N_ant  : 10
+  Train  : torch.Size([18140, 1, 256, 512])
+  Val    : torch.Size([3880, 1, 256, 512])
+  Test   : torch.Size([3900, 1, 256, 512])
+
+  Class distribution (train):
+    1. Circle      : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    2. Square      : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    3. Rectangle   : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    4. Triangle    : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    5. Oval        : 3628  xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+  ---- seed 0 ----
+  ShapeCNN — 115,045 parameters
+
+==============================================================
+  Training | N_ant=10 | 60 epochs | lr=0.0003
+==============================================================
+  Ep |   TrLoss |   VaLoss |   TrAcc |   VaAcc |        LR
+--------------------------------------------------------------
+   1 |   1.6090 |   1.6051 |   20.5% |   20.0% |  0.000120  (51.9s)  EMA_VaLoss=1.6051
+   2 |   1.5665 |   1.5314 |   25.8% |   26.0% |  0.000210  (51.0s)  EMA_VaLoss=1.5830
+   3 |   1.4612 |   1.5373 |   34.2% |   27.9% |  0.000300  (50.8s)  EMA_VaLoss=1.5693
+   4 |   1.3496 |   2.4228 |   37.2% |   20.5% |  0.000300  (51.1s)  EMA_VaLoss=1.8253
+   5 |   1.2779 |   2.9225 |   39.5% |   20.9% |  0.000299  (49.9s)  EMA_VaLoss=2.1545
+   6 |   1.2296 |   1.8529 |   40.1% |   24.4% |  0.000298  (51.0s)  EMA_VaLoss=2.0640
+   7 |   1.1972 |   2.5805 |   42.0% |   20.6% |  0.000296  (50.8s)  EMA_VaLoss=2.2190
+   8 |   1.1772 |   1.1459 |   42.6% |   45.4% |  0.000294  (51.6s)  EMA_VaLoss=1.8971
+   9 |   1.1654 |   1.1977 |   43.4% |   43.0% |  0.000292  (50.7s)  EMA_VaLoss=1.6872
+  10 |   1.1366 |   1.2720 |   45.0% |   38.4% |  0.000289  (51.5s)  EMA_VaLoss=1.5627
+  11 |   1.1232 |   2.2009 |   45.7% |   22.3% |  0.000286  (51.1s)  EMA_VaLoss=1.7541
+  12 |   1.1082 |   1.2962 |   47.1% |   39.7% |  0.000282  (50.9s)  EMA_VaLoss=1.6168
+  13 |   1.0910 |   2.2920 |   47.6% |   21.7% |  0.000278  (50.9s)  EMA_VaLoss=1.8193
+  14 |   1.0781 |   2.2061 |   48.5% |   21.7% |  0.000273  (51.8s)  EMA_VaLoss=1.9354
+  15 |   1.0577 |   1.4712 |   49.3% |   32.0% |  0.000268  (52.5s)  EMA_VaLoss=1.7961
+  16 |   1.0463 |   1.4785 |   50.1% |   35.1% |  0.000263  (53.0s)  EMA_VaLoss=1.7008
+  17 |   1.0348 |   1.5140 |   51.1% |   34.6% |  0.000258  (52.5s)  EMA_VaLoss=1.6448
+  18 |   1.0166 |   1.3215 |   52.3% |   38.8% |  0.000252  (53.2s)  EMA_VaLoss=1.5478
+  19 |   1.0025 |   0.9943 |   52.8% |   53.7% |  0.000246  (52.4s)  EMA_VaLoss=1.3818
+  20 |   0.9879 |   0.9864 |   54.1% |   54.1% |  0.000239  (51.5s)  EMA_VaLoss=1.2631
+  21 |   0.9702 |   0.9980 |   54.9% |   53.1% |  0.000232  (49.5s)  EMA_VaLoss=1.1836
+  22 |   0.9684 |   1.0441 |   55.6% |   49.9% |  0.000225  (49.7s)  EMA_VaLoss=1.1418
+  23 |   0.9655 |   0.9736 |   56.2% |   53.8% |  0.000218  (50.2s)  EMA_VaLoss=1.0913
+  24 |   0.9498 |   0.9796 |   56.1% |   56.5% |  0.000211  (51.3s)  EMA_VaLoss=1.0578
+  25 |   0.9396 |   1.0436 |   57.2% |   52.7% |  0.000203  (49.8s)  EMA_VaLoss=1.0535
+  26 |   0.9251 |   0.9307 |   57.7% |   59.7% |  0.000195  (49.6s)  EMA_VaLoss=1.0167
+  27 |   0.9162 |   1.0069 |   58.3% |   55.7% |  0.000187  (50.0s)  EMA_VaLoss=1.0137
+  28 |   0.9043 |   0.8971 |   59.5% |   59.4% |  0.000179  (50.1s)  EMA_VaLoss=0.9787
+  29 |   0.9008 |   1.3672 |   59.5% |   46.2% |  0.000171  (50.2s)  EMA_VaLoss=1.0953
+  30 |   0.8794 |   0.8985 |   61.0% |   58.9% |  0.000163  (50.3s)  EMA_VaLoss=1.0362
+  31 |   0.8831 |   0.8936 |   60.5% |   62.3% |  0.000155  (51.7s)  EMA_VaLoss=0.9935
+  32 |   0.8655 |   0.9291 |   61.5% |   59.1% |  0.000146  (50.8s)  EMA_VaLoss=0.9741
+  33 |   0.8577 |   0.9104 |   62.1% |   56.7% |  0.000138  (49.7s)  EMA_VaLoss=0.9550
+  34 |   0.8502 |   0.9468 |   62.5% |   58.9% |  0.000130  (52.4s)  EMA_VaLoss=0.9526
+  35 |   0.8396 |   1.2380 |   63.1% |   48.0% |  0.000122  (50.1s)  EMA_VaLoss=1.0382
+  36 |   0.8267 |   1.0486 |   63.9% |   54.2% |  0.000114  (50.9s)  EMA_VaLoss=1.0413
+  37 |   0.8255 |   0.8350 |   63.9% |   63.6% |  0.000106  (50.2s)  EMA_VaLoss=0.9794
+  38 |   0.8204 |   0.8529 |   64.0% |   63.1% |  0.000098  (51.1s)  EMA_VaLoss=0.9415
+  39 |   0.8137 |   0.9289 |   64.2% |   58.2% |  0.000090  (50.4s)  EMA_VaLoss=0.9377
+  40 |   0.8075 |   0.8687 |   65.1% |   61.5% |  0.000083  (51.1s)  EMA_VaLoss=0.9170
+  41 |   0.8016 |   0.8215 |   65.8% |   64.3% |  0.000076  (51.2s)  EMA_VaLoss=0.8883
+  42 |   0.7987 |   0.8185 |   65.2% |   65.8% |  0.000069  (51.3s)  EMA_VaLoss=0.8674
+  43 |   0.7897 |   0.8106 |   65.8% |   65.4% |  0.000062  (52.3s)  EMA_VaLoss=0.8504
+  44 |   0.7788 |   0.8871 |   66.6% |   61.9% |  0.000055  (50.0s)  EMA_VaLoss=0.8614
+  45 |   0.7774 |   0.8061 |   66.5% |   65.7% |  0.000049  (52.6s)  EMA_VaLoss=0.8448
+  46 |   0.7772 |   0.8143 |   66.5% |   65.3% |  0.000043  (52.1s)  EMA_VaLoss=0.8357
+  47 |   0.7673 |   0.7911 |   67.2% |   66.6% |  0.000038  (52.1s)  EMA_VaLoss=0.8223
+  48 |   0.7659 |   0.7998 |   67.2% |   66.3% |  0.000033  (51.5s)  EMA_VaLoss=0.8155
+  49 |   0.7654 |   0.7942 |   67.0% |   66.2% |  0.000028  (53.0s)  EMA_VaLoss=0.8091
+  50 |   0.7608 |   0.7962 |   67.2% |   65.7% |  0.000023  (53.7s)  EMA_VaLoss=0.8053
+  51 |   0.7549 |   0.8565 |   67.6% |   63.4% |  0.000019  (51.0s)  EMA_VaLoss=0.8206
+  52 |   0.7538 |   0.8021 |   67.8% |   66.0% |  0.000015  (51.4s)  EMA_VaLoss=0.8151
+  53 |   0.7535 |   0.7846 |   67.5% |   66.6% |  0.000012  (50.1s)  EMA_VaLoss=0.8059
+  54 |   0.7503 |   0.7815 |   67.7% |   67.0% |  0.000009  (50.4s)  EMA_VaLoss=0.7986
+  55 |   0.7493 |   0.7819 |   68.2% |   66.9% |  0.000007  (50.0s)  EMA_VaLoss=0.7936
+  56 |   0.7488 |   0.7789 |   68.1% |   66.9% |  0.000005  (50.3s)  EMA_VaLoss=0.7892
+  57 |   0.7481 |   0.7798 |   68.1% |   67.1% |  0.000003  (49.8s)  EMA_VaLoss=0.7864
+  58 |   0.7484 |   0.7791 |   67.7% |   67.0% |  0.000002  (50.6s)  EMA_VaLoss=0.7842
+  59 |   0.7471 |   0.7805 |   68.2% |   67.2% |  0.000001  (50.6s)  EMA_VaLoss=0.7831
+  60 |   0.7467 |   0.7790 |   68.2% |   67.0% |  0.000001  (50.9s)  EMA_VaLoss=0.7819
+
+  Best val loss: 0.7819
+
+  Test Accuracy (N_ant=10): 66.54%
+
+              precision    recall  f1-score   support
+
+      Circle      0.911     0.906     0.909       780
+      Square      0.588     0.718     0.647       780
+   Rectangle      0.444     0.268     0.334       780
+    Triangle      0.539     0.612     0.573       780
+        Oval      0.787     0.823     0.805       780
+
+    accuracy                          0.665      3900
+   macro avg      0.654     0.665     0.653      3900
+weighted avg      0.654     0.665     0.653      3900
+
+Figure(1300x500)
+  Saved: confusion_N10.png
+  seed=0  |  acc=66.54%
+
+  ---- seed 1 ----
+
+==============================================================
+  Training | N_ant=10 | 60 epochs | lr=0.0003
+==============================================================
+  Ep |   TrLoss |   VaLoss |   TrAcc |   VaAcc |        LR
+--------------------------------------------------------------
+   1 |   1.6063 |   1.6048 |   22.1% |   24.1% |  0.000120  (50.5s)  EMA_VaLoss=1.6048
+   2 |   1.5692 |   1.5358 |   29.5% |   31.8% |  0.000210  (50.8s)  EMA_VaLoss=1.5841
+   3 |   1.4625 |   1.4032 |   35.6% |   34.5% |  0.000300  (51.2s)  EMA_VaLoss=1.5298
+   4 |   1.3576 |   1.7610 |   37.8% |   23.6% |  0.000300  (51.8s)  EMA_VaLoss=1.5992
+   5 |   1.2857 |   2.8237 |   39.1% |   20.4% |  0.000299  (51.2s)  EMA_VaLoss=1.9665
+   6 |   1.2391 |   2.0659 |   40.4% |   26.5% |  0.000298  (51.4s)  EMA_VaLoss=1.9964
+   7 |   1.2235 |   1.6438 |   41.1% |   25.6% |  0.000296  (51.4s)  EMA_VaLoss=1.8906
+   8 |   1.1875 |   1.2701 |   42.9% |   38.7% |  0.000294  (51.6s)  EMA_VaLoss=1.7045
+   9 |   1.1615 |   1.3027 |   43.8% |   39.7% |  0.000292  (50.5s)  EMA_VaLoss=1.5839
+  10 |   1.1390 |   1.7138 |   44.4% |   28.4% |  0.000289  (50.6s)  EMA_VaLoss=1.6229
+  11 |   1.1247 |   1.1635 |   45.8% |   45.2% |  0.000286  (50.0s)  EMA_VaLoss=1.4851
+  12 |   1.1064 |   1.1295 |   46.9% |   45.7% |  0.000282  (49.9s)  EMA_VaLoss=1.3784
+  13 |   1.0933 |   1.2421 |   47.8% |   43.2% |  0.000278  (49.9s)  EMA_VaLoss=1.3375
+  14 |   1.0756 |   1.1005 |   48.2% |   48.1% |  0.000273  (51.8s)  EMA_VaLoss=1.2664
+  15 |   1.0699 |   1.0520 |   48.8% |   50.5% |  0.000268  (50.3s)  EMA_VaLoss=1.2021
+  16 |   1.0517 |   1.2145 |   49.9% |   43.9% |  0.000263  (51.6s)  EMA_VaLoss=1.2058
+  17 |   1.0406 |   1.1366 |   50.9% |   48.7% |  0.000258  (52.9s)  EMA_VaLoss=1.1850
+  18 |   1.0304 |   1.1603 |   52.0% |   44.9% |  0.000252  (50.6s)  EMA_VaLoss=1.1776
+  19 |   1.0128 |   1.2235 |   52.7% |   44.5% |  0.000246  (51.9s)  EMA_VaLoss=1.1914
+  20 |   0.9990 |   1.0396 |   53.3% |   51.6% |  0.000239  (50.0s)  EMA_VaLoss=1.1458
+  21 |   0.9911 |   1.1215 |   54.1% |   48.1% |  0.000232  (50.4s)  EMA_VaLoss=1.1385
+  22 |   0.9823 |   1.1500 |   54.7% |   49.1% |  0.000225  (49.9s)  EMA_VaLoss=1.1420
+  23 |   0.9646 |   0.9608 |   56.4% |   57.2% |  0.000218  (50.4s)  EMA_VaLoss=1.0876
+  24 |   0.9529 |   0.9753 |   56.8% |   53.4% |  0.000211  (49.9s)  EMA_VaLoss=1.0539
+  25 |   0.9435 |   0.9684 |   57.7% |   55.5% |  0.000203  (51.2s)  EMA_VaLoss=1.0283
+  26 |   0.9310 |   1.0413 |   58.2% |   56.3% |  0.000195  (51.1s)  EMA_VaLoss=1.0322
+  27 |   0.9341 |   0.9353 |   58.3% |   59.4% |  0.000187  (51.8s)  EMA_VaLoss=1.0031
+  28 |   0.9015 |   1.0479 |   59.8% |   49.5% |  0.000179  (51.8s)  EMA_VaLoss=1.0165
+  29 |   0.8940 |   1.1480 |   60.1% |   48.6% |  0.000171  (50.7s)  EMA_VaLoss=1.0560
+  30 |   0.8838 |   1.7180 |   60.3% |   38.6% |  0.000163  (50.8s)  EMA_VaLoss=1.2546
+  31 |   0.8863 |   0.9046 |   61.0% |   58.8% |  0.000155  (50.7s)  EMA_VaLoss=1.1496
+  32 |   0.8678 |   1.0101 |   61.5% |   56.2% |  0.000146  (50.4s)  EMA_VaLoss=1.1077
+  33 |   0.8651 |   0.8754 |   62.3% |   61.4% |  0.000138  (50.3s)  EMA_VaLoss=1.0380
+  34 |   0.8508 |   1.2005 |   62.6% |   48.9% |  0.000130  (50.8s)  EMA_VaLoss=1.0868
+  35 |   0.8417 |   1.2967 |   63.1% |   45.0% |  0.000122  (51.1s)  EMA_VaLoss=1.1498
+  36 |   0.8346 |   1.0228 |   63.6% |   50.9% |  0.000114  (50.3s)  EMA_VaLoss=1.1117
+  37 |   0.8304 |   0.8688 |   63.7% |   61.2% |  0.000106  (49.8s)  EMA_VaLoss=1.0388
+  38 |   0.8208 |   0.8482 |   64.3% |   63.6% |  0.000098  (51.6s)  EMA_VaLoss=0.9816
+  39 |   0.8134 |   0.9894 |   64.7% |   54.6% |  0.000090  (51.7s)  EMA_VaLoss=0.9840
+  40 |   0.8085 |   1.0697 |   65.1% |   50.7% |  0.000083  (50.7s)  EMA_VaLoss=1.0097
+  41 |   0.7992 |   0.8198 |   65.4% |   64.8% |  0.000076  (50.8s)  EMA_VaLoss=0.9527
+  42 |   0.7904 |   0.8500 |   65.9% |   62.4% |  0.000069  (50.6s)  EMA_VaLoss=0.9219
+  43 |   0.7920 |   0.8116 |   65.6% |   65.4% |  0.000062  (51.4s)  EMA_VaLoss=0.8888
+  44 |   0.7841 |   0.8500 |   66.5% |   62.9% |  0.000055  (51.5s)  EMA_VaLoss=0.8772
+  45 |   0.7837 |   0.8068 |   66.5% |   64.9% |  0.000049  (51.1s)  EMA_VaLoss=0.8561
+  46 |   0.7777 |   0.8275 |   66.3% |   64.1% |  0.000043  (50.6s)  EMA_VaLoss=0.8475
+  47 |   0.7749 |   0.8052 |   66.6% |   65.2% |  0.000038  (50.0s)  EMA_VaLoss=0.8348
+  48 |   0.7675 |   0.8344 |   67.2% |   63.6% |  0.000033  (50.7s)  EMA_VaLoss=0.8347
+  49 |   0.7630 |   0.8671 |   67.2% |   61.6% |  0.000028  (51.1s)  EMA_VaLoss=0.8444
+  50 |   0.7568 |   0.8066 |   67.9% |   66.0% |  0.000023  (49.9s)  EMA_VaLoss=0.8331
+  51 |   0.7616 |   0.7986 |   67.7% |   65.1% |  0.000019  (51.5s)  EMA_VaLoss=0.8227
+  52 |   0.7571 |   0.7982 |   67.7% |   65.0% |  0.000015  (50.3s)  EMA_VaLoss=0.8154
+  53 |   0.7531 |   0.7858 |   67.7% |   66.1% |  0.000012  (51.9s)  EMA_VaLoss=0.8065
+  54 |   0.7534 |   0.7817 |   68.1% |   66.3% |  0.000009  (52.0s)  EMA_VaLoss=0.7991
+  55 |   0.7504 |   0.7998 |   68.1% |   66.1% |  0.000007  (50.0s)  EMA_VaLoss=0.7993
+  56 |   0.7541 |   0.7857 |   68.0% |   66.0% |  0.000005  (49.9s)  EMA_VaLoss=0.7952
+  57 |   0.7475 |   0.7925 |   68.2% |   65.6% |  0.000003  (52.0s)  EMA_VaLoss=0.7944
+  58 |   0.7458 |   0.7820 |   68.3% |   66.4% |  0.000002  (52.1s)  EMA_VaLoss=0.7907
+  59 |   0.7436 |   0.7800 |   68.4% |   66.6% |  0.000001  (50.6s)  EMA_VaLoss=0.7875
+  60 |   0.7477 |   0.7800 |   68.2% |   66.5% |  0.000001  (52.3s)  EMA_VaLoss=0.7852
+
+  Best val loss: 0.7852
+
+  Test Accuracy (N_ant=10): 67.77%
+
+              precision    recall  f1-score   support
+
+      Circle      0.918     0.915     0.917       780
+      Square      0.598     0.667     0.631       780
+   Rectangle      0.471     0.303     0.368       780
+    Triangle      0.576     0.647     0.610       780
+        Oval      0.763     0.856     0.807       780
+
+    accuracy                          0.678      3900
+   macro avg      0.665     0.678     0.666      3900
+weighted avg      0.665     0.678     0.666      3900
+
+Figure(1300x500)
+  Saved: confusion_N10.png
+  seed=1  |  acc=67.77%
+
+  ---- seed 2 ----
+
+==============================================================
+  Training | N_ant=10 | 60 epochs | lr=0.0003
+==============================================================
+  Ep |   TrLoss |   VaLoss |   TrAcc |   VaAcc |        LR
+--------------------------------------------------------------
+   1 |   1.6061 |   1.6059 |   21.7% |   20.5% |  0.000120  (51.2s)  EMA_VaLoss=1.6059
+   2 |   1.5682 |   1.5284 |   29.3% |   37.1% |  0.000210  (50.6s)  EMA_VaLoss=1.5827
+   3 |   1.4527 |   1.5837 |   35.8% |   24.2% |  0.000300  (53.1s)  EMA_VaLoss=1.5830
+   4 |   1.3427 |   1.5119 |   38.1% |   29.5% |  0.000300  (50.0s)  EMA_VaLoss=1.5616
+   5 |   1.2705 |   2.7609 |   39.5% |   20.3% |  0.000299  (50.6s)  EMA_VaLoss=1.9214
+   6 |   1.2305 |   1.7772 |   40.2% |   29.8% |  0.000298  (50.3s)  EMA_VaLoss=1.8782
+   7 |   1.1940 |   2.0072 |   42.2% |   23.6% |  0.000296  (51.5s)  EMA_VaLoss=1.9169
+   8 |   1.1715 |   2.7453 |   43.2% |   21.0% |  0.000294  (51.5s)  EMA_VaLoss=2.1654
+   9 |   1.1502 |   2.2492 |   44.8% |   21.2% |  0.000292  (50.1s)  EMA_VaLoss=2.1905
+  10 |   1.1295 |   1.8690 |   45.6% |   28.3% |  0.000289  (52.3s)  EMA_VaLoss=2.0941
+  11 |   1.1121 |   1.2247 |   46.5% |   40.3% |  0.000286  (51.3s)  EMA_VaLoss=1.8333
+  12 |   1.0981 |   1.9938 |   46.9% |   23.7% |  0.000282  (51.6s)  EMA_VaLoss=1.8814
+  13 |   1.0895 |   1.1153 |   47.9% |   46.5% |  0.000278  (50.5s)  EMA_VaLoss=1.6516
+  14 |   1.0782 |   1.3311 |   48.6% |   37.7% |  0.000273  (51.6s)  EMA_VaLoss=1.5554
+  15 |   1.0659 |   1.2131 |   49.5% |   44.4% |  0.000268  (50.8s)  EMA_VaLoss=1.4527
+  16 |   1.0549 |   1.1688 |   49.8% |   45.6% |  0.000263  (52.3s)  EMA_VaLoss=1.3675
+  17 |   1.0462 |   1.2397 |   50.4% |   43.1% |  0.000258  (52.9s)  EMA_VaLoss=1.3292
+  18 |   1.0313 |   1.6404 |   51.5% |   34.1% |  0.000252  (52.0s)  EMA_VaLoss=1.4226
+  19 |   1.0134 |   1.0620 |   52.4% |   49.5% |  0.000246  (53.0s)  EMA_VaLoss=1.3144
+  20 |   1.0079 |   1.0460 |   52.8% |   51.1% |  0.000239  (51.8s)  EMA_VaLoss=1.2339
+  21 |   0.9905 |   1.7844 |   53.7% |   28.1% |  0.000232  (51.1s)  EMA_VaLoss=1.3990
+  22 |   0.9816 |   2.3404 |   54.6% |   28.6% |  0.000225  (52.3s)  EMA_VaLoss=1.6814
+  23 |   0.9789 |   1.1077 |   55.0% |   49.4% |  0.000218  (52.2s)  EMA_VaLoss=1.5093
+  24 |   0.9645 |   0.9634 |   55.7% |   57.2% |  0.000211  (53.3s)  EMA_VaLoss=1.3455
+  25 |   0.9551 |   1.1529 |   56.1% |   46.2% |  0.000203  (51.7s)  EMA_VaLoss=1.2878
+  26 |   0.9460 |   0.9462 |   57.0% |   55.5% |  0.000195  (51.7s)  EMA_VaLoss=1.1853
+  27 |   0.9392 |   0.9836 |   57.4% |   56.8% |  0.000187  (52.2s)  EMA_VaLoss=1.1248
+  28 |   0.9189 |   1.0424 |   58.7% |   51.1% |  0.000179  (49.9s)  EMA_VaLoss=1.1001
+  29 |   0.9115 |   0.9565 |   59.1% |   57.9% |  0.000171  (51.1s)  EMA_VaLoss=1.0570
+  30 |   0.9038 |   0.9497 |   59.1% |   58.0% |  0.000163  (54.0s)  EMA_VaLoss=1.0248
+  31 |   0.8941 |   1.1398 |   59.9% |   48.1% |  0.000155  (51.7s)  EMA_VaLoss=1.0593
+  32 |   0.8930 |   1.5293 |   60.3% |   36.0% |  0.000146  (52.7s)  EMA_VaLoss=1.2003
+  33 |   0.8733 |   0.9912 |   61.4% |   57.8% |  0.000138  (51.7s)  EMA_VaLoss=1.1376
+  34 |   0.8694 |   1.4499 |   61.4% |   37.0% |  0.000130  (53.2s)  EMA_VaLoss=1.2313
+  35 |   0.8544 |   1.1449 |   61.9% |   52.0% |  0.000122  (52.6s)  EMA_VaLoss=1.2054
+  36 |   0.8471 |   0.8777 |   62.4% |   61.1% |  0.000114  (52.4s)  EMA_VaLoss=1.1071
+  37 |   0.8471 |   0.8543 |   62.5% |   62.6% |  0.000106  (51.8s)  EMA_VaLoss=1.0312
+  38 |   0.8386 |   0.9850 |   63.2% |   56.9% |  0.000098  (53.2s)  EMA_VaLoss=1.0174
+  39 |   0.8307 |   0.8540 |   63.8% |   62.9% |  0.000090  (51.3s)  EMA_VaLoss=0.9684
+  40 |   0.8198 |   1.1996 |   64.0% |   48.8% |  0.000083  (52.4s)  EMA_VaLoss=1.0377
+  41 |   0.8165 |   0.8256 |   64.7% |   64.6% |  0.000076  (52.8s)  EMA_VaLoss=0.9741
+  42 |   0.8088 |   0.8993 |   64.8% |   61.0% |  0.000069  (51.4s)  EMA_VaLoss=0.9517
+  43 |   0.8066 |   0.8496 |   64.8% |   63.1% |  0.000062  (52.3s)  EMA_VaLoss=0.9210
+  44 |   0.7996 |   0.8334 |   65.1% |   63.5% |  0.000055  (52.5s)  EMA_VaLoss=0.8947
+  45 |   0.7897 |   0.8812 |   65.6% |   61.9% |  0.000049  (52.6s)  EMA_VaLoss=0.8907
+  46 |   0.7911 |   0.8269 |   65.7% |   64.4% |  0.000043  (50.9s)  EMA_VaLoss=0.8715
+  47 |   0.7872 |   0.8255 |   65.7% |   64.1% |  0.000038  (51.1s)  EMA_VaLoss=0.8577
+  48 |   0.7802 |   0.8212 |   66.3% |   63.7% |  0.000033  (52.1s)  EMA_VaLoss=0.8468
+  49 |   0.7842 |   0.9531 |   66.2% |   57.9% |  0.000028  (51.8s)  EMA_VaLoss=0.8786
+  50 |   0.7757 |   0.8064 |   66.4% |   65.4% |  0.000023  (52.7s)  EMA_VaLoss=0.8570
+  51 |   0.7682 |   0.8475 |   66.8% |   63.0% |  0.000019  (52.1s)  EMA_VaLoss=0.8541
+  52 |   0.7713 |   0.8147 |   66.8% |   64.8% |  0.000015  (53.1s)  EMA_VaLoss=0.8423
+  53 |   0.7715 |   0.8049 |   66.5% |   65.2% |  0.000012  (52.8s)  EMA_VaLoss=0.8311
+  54 |   0.7660 |   0.8091 |   66.9% |   65.2% |  0.000009  (53.9s)  EMA_VaLoss=0.8245
+  55 |   0.7619 |   0.8184 |   67.1% |   64.5% |  0.000007  (54.9s)  EMA_VaLoss=0.8227
+  56 |   0.7634 |   0.8045 |   66.9% |   65.4% |  0.000005  (54.1s)  EMA_VaLoss=0.8172
+  57 |   0.7644 |   0.8035 |   66.9% |   65.5% |  0.000003  (54.3s)  EMA_VaLoss=0.8131
+  58 |   0.7617 |   0.8022 |   67.2% |   65.5% |  0.000002  (58.1s)  EMA_VaLoss=0.8098
+  59 |   0.7609 |   0.8005 |   67.1% |   65.7% |  0.000001  (58.2s)  EMA_VaLoss=0.8070
+  60 |   0.7633 |   0.8013 |   67.1% |   65.5% |  0.000001  (50.3s)  EMA_VaLoss=0.8053
+
+  Best val loss: 0.8053
+
+  Test Accuracy (N_ant=10): 65.95%
+
+              precision    recall  f1-score   support
+
+      Circle      0.896     0.917     0.906       780
+      Square      0.609     0.683     0.644       780
+   Rectangle      0.418     0.258     0.319       780
+    Triangle      0.536     0.626     0.578       780
+        Oval      0.760     0.814     0.786       780
+
+    accuracy                          0.659      3900
+   macro avg      0.644     0.659     0.647      3900
+weighted avg      0.644     0.659     0.647      3900
+
+Figure(1300x500)
+  Saved: confusion_N10.png
+  seed=2  |  acc=65.95%
+
+  ---- seed 3 ----
+
+==============================================================
+  Training | N_ant=10 | 60 epochs | lr=0.0003
+==============================================================
+  Ep |   TrLoss |   VaLoss |   TrAcc |   VaAcc |        LR
+--------------------------------------------------------------
+   1 |   1.6050 |   1.6030 |   22.2% |   22.6% |  0.000120  (51.1s)  EMA_VaLoss=1.6030
+   2 |   1.5701 |   1.5389 |   30.0% |   31.4% |  0.000210  (51.7s)  EMA_VaLoss=1.5837
+   3 |   1.4716 |   1.4196 |   36.2% |   40.2% |  0.000300  (50.3s)  EMA_VaLoss=1.5345
+   4 |   1.3410 |   2.0649 |   38.9% |   20.1% |  0.000300  (50.4s)  EMA_VaLoss=1.6936
+   5 |   1.2596 |   1.4398 |   40.5% |   30.4% |  0.000299  (51.0s)  EMA_VaLoss=1.6175
+   6 |   1.2186 |   1.1689 |   41.8% |   45.5% |  0.000298  (50.5s)  EMA_VaLoss=1.4829
+   7 |   1.1913 |   1.2031 |   43.0% |   43.6% |  0.000296  (50.5s)  EMA_VaLoss=1.3990
+   8 |   1.1637 |   1.8408 |   44.1% |   23.5% |  0.000294  (51.7s)  EMA_VaLoss=1.5315
+   9 |   1.1445 |   1.9077 |   45.6% |   22.3% |  0.000292  (58.3s)  EMA_VaLoss=1.6444
+  10 |   1.1276 |   1.1027 |   46.1% |   50.4% |  0.000289  (64.1s)  EMA_VaLoss=1.4819
+  11 |   1.1011 |   1.1002 |   47.6% |   47.8% |  0.000286  (63.6s)  EMA_VaLoss=1.3674
+  12 |   1.0905 |   1.1676 |   48.8% |   45.8% |  0.000282  (65.3s)  EMA_VaLoss=1.3075
+  13 |   1.0728 |   1.2312 |   49.3% |   43.6% |  0.000278  (62.6s)  EMA_VaLoss=1.2846
+  14 |   1.0544 |   1.3019 |   50.4% |   42.2% |  0.000273  (64.1s)  EMA_VaLoss=1.2898
+  15 |   1.0389 |   1.0399 |   51.5% |   50.3% |  0.000268  (63.0s)  EMA_VaLoss=1.2148
+  16 |   1.0239 |   1.1769 |   52.4% |   46.3% |  0.000263  (62.9s)  EMA_VaLoss=1.2035
+  17 |   1.0124 |   1.1503 |   53.9% |   45.5% |  0.000258  (64.0s)  EMA_VaLoss=1.1875
+  18 |   1.0007 |   1.2186 |   54.0% |   44.3% |  0.000252  (62.9s)  EMA_VaLoss=1.1968
+  19 |   0.9799 |   1.0140 |   55.3% |   52.1% |  0.000246  (62.6s)  EMA_VaLoss=1.1420
+  20 |   0.9785 |   1.1176 |   55.5% |   48.0% |  0.000239  (63.7s)  EMA_VaLoss=1.1347
+  21 |   0.9593 |   1.6440 |   57.2% |   32.7% |  0.000232  (61.3s)  EMA_VaLoss=1.2875
+  22 |   0.9455 |   1.1653 |   57.5% |   45.5% |  0.000225  (63.8s)  EMA_VaLoss=1.2508
+  23 |   0.9324 |   1.1078 |   58.9% |   49.6% |  0.000218  (61.7s)  EMA_VaLoss=1.2079
+  24 |   0.9226 |   0.9505 |   58.7% |   55.8% |  0.000211  (64.0s)  EMA_VaLoss=1.1307
+  25 |   0.9127 |   1.1441 |   59.4% |   49.9% |  0.000203  (61.1s)  EMA_VaLoss=1.1347
+  26 |   0.8995 |   0.9303 |   60.2% |   57.5% |  0.000195  (51.3s)  EMA_VaLoss=1.0734
+  27 |   0.8898 |   0.9338 |   61.1% |   58.3% |  0.000187  (62.6s)  EMA_VaLoss=1.0315
+  28 |   0.8816 |   1.0081 |   61.1% |   52.9% |  0.000179  (62.7s)  EMA_VaLoss=1.0245
+  29 |   0.8752 |   0.9500 |   61.8% |   57.4% |  0.000171  (65.7s)  EMA_VaLoss=1.0021
+  30 |   0.8548 |   1.5387 |   62.7% |   38.0% |  0.000163  (62.7s)  EMA_VaLoss=1.1631
+  31 |   0.8492 |   0.9073 |   63.2% |   59.2% |  0.000155  (63.9s)  EMA_VaLoss=1.0864
+  32 |   0.8433 |   0.8850 |   62.8% |   61.2% |  0.000146  (64.1s)  EMA_VaLoss=1.0260
+  33 |   0.8279 |   0.9107 |   64.6% |   59.9% |  0.000138  (64.3s)  EMA_VaLoss=0.9914
+  34 |   0.8230 |   1.1103 |   64.6% |   50.7% |  0.000130  (65.4s)  EMA_VaLoss=1.0271
+  35 |   0.8208 |   1.2247 |   64.6% |   47.4% |  0.000122  (63.4s)  EMA_VaLoss=1.0864
+  36 |   0.8111 |   0.8537 |   64.9% |   61.6% |  0.000114  (63.1s)  EMA_VaLoss=1.0166
+  37 |   0.7997 |   0.8545 |   65.4% |   63.1% |  0.000106  (63.7s)  EMA_VaLoss=0.9679
+  38 |   0.7989 |   0.8448 |   65.4% |   63.1% |  0.000098  (62.7s)  EMA_VaLoss=0.9310
+  39 |   0.7911 |   0.8420 |   65.7% |   62.7% |  0.000090  (61.5s)  EMA_VaLoss=0.9043
+  40 |   0.7868 |   0.8246 |   66.2% |   64.5% |  0.000083  (61.6s)  EMA_VaLoss=0.8804
+  41 |   0.7753 |   0.8923 |   66.9% |   60.1% |  0.000076  (64.3s)  EMA_VaLoss=0.8840
+  42 |   0.7720 |   1.0201 |   66.8% |   55.2% |  0.000069  (63.2s)  EMA_VaLoss=0.9248
+  43 |   0.7679 |   0.8808 |   67.0% |   61.4% |  0.000062  (62.4s)  EMA_VaLoss=0.9116
+  44 |   0.7677 |   0.8497 |   67.5% |   62.6% |  0.000055  (62.8s)  EMA_VaLoss=0.8930
+  45 |   0.7651 |   0.8108 |   67.3% |   64.9% |  0.000049  (63.1s)  EMA_VaLoss=0.8684
+  46 |   0.7623 |   0.7925 |   67.4% |   65.3% |  0.000043  (63.2s)  EMA_VaLoss=0.8456
+  47 |   0.7534 |   0.7898 |   67.7% |   66.1% |  0.000038  (63.1s)  EMA_VaLoss=0.8288
+  48 |   0.7477 |   0.8491 |   67.6% |   62.6% |  0.000033  (61.7s)  EMA_VaLoss=0.8349
+  49 |   0.7433 |   0.8013 |   68.5% |   66.9% |  0.000028  (63.1s)  EMA_VaLoss=0.8248
+  50 |   0.7427 |   0.8091 |   68.6% |   64.6% |  0.000023  (63.4s)  EMA_VaLoss=0.8201
+  51 |   0.7379 |   0.8050 |   68.9% |   65.6% |  0.000019  (62.1s)  EMA_VaLoss=0.8156
+  52 |   0.7333 |   0.7703 |   69.0% |   67.2% |  0.000015  (63.1s)  EMA_VaLoss=0.8020
+  53 |   0.7355 |   0.7734 |   68.6% |   67.0% |  0.000012  (61.4s)  EMA_VaLoss=0.7934
+  54 |   0.7323 |   0.7792 |   68.7% |   66.9% |  0.000009  (62.6s)  EMA_VaLoss=0.7892
+  55 |   0.7297 |   0.7947 |   69.5% |   66.0% |  0.000007  (66.1s)  EMA_VaLoss=0.7908
+  56 |   0.7284 |   0.7731 |   69.3% |   67.2% |  0.000005  (62.0s)  EMA_VaLoss=0.7855
+  57 |   0.7266 |   0.7691 |   69.5% |   67.4% |  0.000003  (62.9s)  EMA_VaLoss=0.7806
+  58 |   0.7315 |   0.7719 |   69.1% |   67.3% |  0.000002  (62.4s)  EMA_VaLoss=0.7780
+  59 |   0.7251 |   0.7689 |   69.1% |   67.4% |  0.000001  (63.8s)  EMA_VaLoss=0.7753
+  60 |   0.7269 |   0.7675 |   69.4% |   67.5% |  0.000001  (63.6s)  EMA_VaLoss=0.7729
+
+  Best val loss: 0.7729
+
+  Test Accuracy (N_ant=10): 67.67%
+
+              precision    recall  f1-score   support
+
+      Circle      0.904     0.919     0.912       780
+      Square      0.612     0.721     0.662       780
+   Rectangle      0.450     0.255     0.326       780
+    Triangle      0.572     0.660     0.613       780
+        Oval      0.764     0.828     0.795       780
+
+    accuracy                          0.677      3900
+   macro avg      0.660     0.677     0.661      3900
+weighted avg      0.660     0.677     0.661      3900
+
+Figure(1300x500)
+  Saved: confusion_N10.png
+  seed=3  |  acc=67.67%
+
+  ---- seed 4 ----
+
+==============================================================
+  Training | N_ant=10 | 60 epochs | lr=0.0003
+==============================================================
+  Ep |   TrLoss |   VaLoss |   TrAcc |   VaAcc |        LR
+--------------------------------------------------------------
+   1 |   1.6050 |   1.6060 |   22.4% |   23.2% |  0.000120  (64.0s)  EMA_VaLoss=1.6060
+   2 |   1.5699 |   1.5686 |   28.5% |   25.7% |  0.000210  (62.5s)  EMA_VaLoss=1.5948
+   3 |   1.4716 |   1.4269 |   34.9% |   36.3% |  0.000300  (64.0s)  EMA_VaLoss=1.5444
+   4 |   1.3679 |   1.3742 |   37.2% |   34.1% |  0.000300  (62.9s)  EMA_VaLoss=1.4934
+   5 |   1.2787 |   1.2466 |   39.7% |   41.3% |  0.000299  (63.2s)  EMA_VaLoss=1.4193
+   6 |   1.2385 |   1.6378 |   41.2% |   27.8% |  0.000298  (62.8s)  EMA_VaLoss=1.4849
+   7 |   1.1995 |   1.8550 |   42.2% |   24.6% |  0.000296  (63.4s)  EMA_VaLoss=1.5959
+   8 |   1.1815 |   1.1600 |   43.1% |   47.3% |  0.000294  (62.9s)  EMA_VaLoss=1.4651
+   9 |   1.1464 |   1.3809 |   44.9% |   37.9% |  0.000292  (63.8s)  EMA_VaLoss=1.4399
+  10 |   1.1438 |   1.1165 |   44.9% |   46.2% |  0.000289  (63.7s)  EMA_VaLoss=1.3429
+  11 |   1.1236 |   1.1332 |   46.1% |   45.9% |  0.000286  (63.5s)  EMA_VaLoss=1.2800
+  12 |   1.1056 |   1.2686 |   46.6% |   38.0% |  0.000282  (53.7s)  EMA_VaLoss=1.2766
+  13 |   1.1026 |   1.2262 |   47.7% |   40.8% |  0.000278  (62.4s)  EMA_VaLoss=1.2615
+  14 |   1.0814 |   1.3092 |   48.6% |   39.5% |  0.000273  (62.3s)  EMA_VaLoss=1.2758
+  15 |   1.0771 |   1.0753 |   49.0% |   49.9% |  0.000268  (63.2s)  EMA_VaLoss=1.2156
+  16 |   1.0565 |   1.2028 |   50.1% |   41.9% |  0.000263  (63.3s)  EMA_VaLoss=1.2118
+  17 |   1.0449 |   1.4908 |   51.2% |   34.6% |  0.000258  (63.1s)  EMA_VaLoss=1.2955
+  18 |   1.0298 |   1.2071 |   51.8% |   43.0% |  0.000252  (62.7s)  EMA_VaLoss=1.2690
+  19 |   1.0169 |   1.1652 |   52.5% |   45.7% |  0.000246  (64.3s)  EMA_VaLoss=1.2379
+  20 |   1.0131 |   1.1403 |   52.6% |   47.3% |  0.000239  (62.9s)  EMA_VaLoss=1.2086
+  21 |   0.9951 |   1.2016 |   53.8% |   47.5% |  0.000232  (61.4s)  EMA_VaLoss=1.2065
+  22 |   0.9859 |   0.9641 |   54.6% |   56.1% |  0.000225  (63.5s)  EMA_VaLoss=1.1338
+  23 |   0.9721 |   1.5746 |   55.3% |   34.6% |  0.000218  (63.9s)  EMA_VaLoss=1.2660
+  24 |   0.9613 |   0.9564 |   55.8% |   57.2% |  0.000211  (63.8s)  EMA_VaLoss=1.1732
+  25 |   0.9512 |   0.9845 |   56.5% |   54.0% |  0.000203  (62.0s)  EMA_VaLoss=1.1166
+  26 |   0.9421 |   0.9793 |   56.9% |   55.7% |  0.000195  (63.9s)  EMA_VaLoss=1.0754
+  27 |   0.9253 |   1.6685 |   58.3% |   36.2% |  0.000187  (63.1s)  EMA_VaLoss=1.2533
+  28 |   0.9239 |   1.0423 |   58.3% |   55.3% |  0.000179  (64.3s)  EMA_VaLoss=1.1900
+  29 |   0.9163 |   1.3407 |   58.7% |   40.9% |  0.000171  (61.9s)  EMA_VaLoss=1.2352
+  30 |   0.8910 |   0.9964 |   60.0% |   54.9% |  0.000163  (63.0s)  EMA_VaLoss=1.1636
+  31 |   0.8976 |   0.9233 |   59.6% |   57.8% |  0.000155  (64.7s)  EMA_VaLoss=1.0915
+  32 |   0.8877 |   1.3808 |   60.3% |   39.5% |  0.000146  (63.1s)  EMA_VaLoss=1.1783
+  33 |   0.8739 |   0.9868 |   61.5% |   57.0% |  0.000138  (63.1s)  EMA_VaLoss=1.1208
+  34 |   0.8606 |   1.0014 |   62.0% |   57.1% |  0.000130  (61.6s)  EMA_VaLoss=1.0850
+  35 |   0.8459 |   0.8817 |   63.1% |   61.3% |  0.000122  (62.0s)  EMA_VaLoss=1.0240
+  36 |   0.8471 |   1.0104 |   62.3% |   50.9% |  0.000114  (62.9s)  EMA_VaLoss=1.0199
+  37 |   0.8347 |   0.8859 |   63.4% |   61.2% |  0.000106  (63.7s)  EMA_VaLoss=0.9797
+  38 |   0.8274 |   0.8440 |   63.6% |   63.4% |  0.000098  (62.7s)  EMA_VaLoss=0.9390
+  39 |   0.8271 |   0.9421 |   63.9% |   57.0% |  0.000090  (62.6s)  EMA_VaLoss=0.9399
+  40 |   0.8147 |   0.8609 |   64.3% |   62.1% |  0.000083  (62.7s)  EMA_VaLoss=0.9162
+  41 |   0.8044 |   0.8864 |   64.8% |   60.3% |  0.000076  (63.7s)  EMA_VaLoss=0.9073
+  42 |   0.7985 |   0.8229 |   65.2% |   65.2% |  0.000069  (64.1s)  EMA_VaLoss=0.8820
+  43 |   0.7923 |   0.8321 |   65.9% |   64.2% |  0.000062  (63.4s)  EMA_VaLoss=0.8670
+  44 |   0.7878 |   0.9113 |   65.9% |   60.6% |  0.000055  (63.3s)  EMA_VaLoss=0.8803
+  45 |   0.7843 |   0.9390 |   66.0% |   58.0% |  0.000049  (63.0s)  EMA_VaLoss=0.8979
+  46 |   0.7814 |   0.8139 |   66.0% |   64.6% |  0.000043  (63.4s)  EMA_VaLoss=0.8727
+  47 |   0.7769 |   0.8071 |   66.4% |   65.3% |  0.000038  (60.0s)  EMA_VaLoss=0.8530
+  48 |   0.7714 |   0.8447 |   66.9% |   63.6% |  0.000033  (63.5s)  EMA_VaLoss=0.8505
+  49 |   0.7659 |   0.8890 |   67.1% |   61.9% |  0.000028  (62.6s)  EMA_VaLoss=0.8621
+  50 |   0.7671 |   0.8509 |   67.2% |   62.8% |  0.000023  (65.0s)  EMA_VaLoss=0.8587
+  51 |   0.7609 |   0.9104 |   67.4% |   60.6% |  0.000019  (62.6s)  EMA_VaLoss=0.8742
+  52 |   0.7614 |   0.8031 |   67.4% |   65.4% |  0.000015  (63.6s)  EMA_VaLoss=0.8529
+  53 |   0.7577 |   0.7887 |   67.1% |   66.0% |  0.000012  (63.3s)  EMA_VaLoss=0.8336
+  54 |   0.7546 |   0.8115 |   67.6% |   64.8% |  0.000009  (62.8s)  EMA_VaLoss=0.8270
+  55 |   0.7528 |   0.7873 |   67.7% |   66.6% |  0.000007  (64.0s)  EMA_VaLoss=0.8151
+  56 |   0.7525 |   0.7884 |   68.0% |   66.2% |  0.000005  (62.9s)  EMA_VaLoss=0.8071
+  57 |   0.7517 |   0.7837 |   67.9% |   66.9% |  0.000003  (63.2s)  EMA_VaLoss=0.8001
+  58 |   0.7546 |   0.7829 |   67.6% |   66.5% |  0.000002  (64.9s)  EMA_VaLoss=0.7949
+  59 |   0.7488 |   0.7828 |   68.0% |   66.5% |  0.000001  (64.9s)  EMA_VaLoss=0.7913
+  60 |   0.7545 |   0.7834 |   67.3% |   66.7% |  0.000001  (64.1s)  EMA_VaLoss=0.7889
+
+  Best val loss: 0.7889
+
+  Test Accuracy (N_ant=10): 67.18%
+
+              precision    recall  f1-score   support
+
+      Circle      0.917     0.922     0.919       780
+      Square      0.597     0.728     0.656       780
+   Rectangle      0.430     0.200     0.273       780
+    Triangle      0.541     0.686     0.605       780
+        Oval      0.789     0.823     0.806       780
+
+    accuracy                          0.672      3900
+   macro avg      0.655     0.672     0.652      3900
+weighted avg      0.655     0.672     0.652      3900
+
+Figure(1300x500)
+  Saved: confusion_N10.png
+  seed=4  |  acc=67.18%
+  Model saved: radar_shape_model_N10.pt
+Figure(1200x400)
+  Saved: history_N10.png
+Figure(1300x500)
+  Saved: confusion_N10.png
+
+  N_ant=10 done  |  mean acc = 67.02% ± 0.77%  (best seed 1: 67.77%)
+Saved per-seed results: results_per_seed_N10.csv
+Traceback (most recent call last):
+  File "/content/radar_obj_classifier_cnn_multiple_antenna.py", line 1229, in <module>
+    run_single(args.single, seeds=seeds_override)
+  File "/content/radar_obj_classifier_cnn_multiple_antenna.py", line 1151, in run_single
+    raw       = scipy.io.loadmat(filepath) \
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/scipy/io/matlab/_mio.py", line 234, in loadmat
+    MR, _ = mat_reader_factory(f, **kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/dist-packages/scipy/io/matlab/_mio.py", line 80, in mat_reader_factory
+    raise NotImplementedError('Please use HDF reader for matlab v7.3 '
+NotImplementedError: Please use HDF reader for matlab v7.3 files, e.g. h5py

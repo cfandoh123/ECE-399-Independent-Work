@@ -20,16 +20,10 @@
 
  2) Grid-compare the same sample across all antenna counts (needs
     the matching .mat + .pt files for each N):
-        python inspect_heatmaps.py \
-            --mat-dir . --model-dir results \
-            --shape Triangle --sample 0 --compare-n
+        python inspect_heatmaps.py --mat-dir . --model-dir results --shape Triangle --sample 0 --compare-n
 
  3) Save a per-class "correct vs wrong" montage for a writeup:
-        python inspect_heatmaps.py \
-            --mat radar_shapes_N4.mat \
-            --model results/radar_shape_model_N4.pt \
-            --shape Rectangle --montage --n-examples 6 \
-            --save rect_N4_montage.png
+        python inspect_heatmaps.py --mat radar_shapes_N4.mat --model radar_shape_model_N4.pt --shape Rectangle --montage --n-examples 6 --save rect_N4_montage.png
 
  The script never modifies the model — it is read-only analysis.
 
@@ -58,6 +52,14 @@ import torch.nn as nn
 CLASS_NAMES  = ['Circle', 'Square', 'Rectangle', 'Triangle', 'Oval']
 N_CLASSES    = len(CLASS_NAMES)
 CLASS_COLORS = ['#3498DB', '#E74C3C', '#2ECC71', '#9B59B6', '#F39C12']
+
+# Expected heatmap dimensions set by the MATLAB data generator.
+# The trained ShapeCNN was fed (N, 1, NFFT_R, NFFT_A) tensors, so any
+# .mat file we load must be forced into that orientation before
+# inference or the CNN's learned features point the wrong way and
+# accuracy collapses to chance.
+NFFT_R = 512   # range bins (rows)
+NFFT_A = 256   # angle bins (cols)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -107,11 +109,39 @@ class ShapeCNN(nn.Module):
 # ─────────────────────────────────────────────────────────────
 #  Dataset loading — supports both scipy v7 and HDF5 v7.3 .mat
 # ─────────────────────────────────────────────────────────────
+def _canonicalise_X(X):
+    """
+    Force X into the orientation the CNN was trained on: (N, NFFT_R, NFFT_A).
+
+    Depending on the MATLAB save version and the path the loader takes
+    (scipy vs h5py) the same file can come back shaped as
+    (N, 512, 256) or (N, 256, 512). Feeding the wrong orientation
+    silently drops accuracy to chance (≈20 % for 5 classes), because
+    the CNN still runs but the features it learned no longer line up
+    with the input axes. This helper picks the right transposition so
+    the rest of the script and the model see (N, range, angle).
+    """
+    if X.ndim != 3:
+        return X, False
+
+    n, h, w = X.shape
+    if h == NFFT_R and w == NFFT_A:
+        return X, False                                  # already correct
+    if h == NFFT_A and w == NFFT_R:
+        return np.ascontiguousarray(X.transpose(0, 2, 1)), True
+    # Last-ditch fallback: the larger spatial dim is almost always
+    # the range axis (512 vs 256). Transpose so the bigger dim comes
+    # first. This handles future generators that might change NFFT.
+    if h < w:
+        return np.ascontiguousarray(X.transpose(0, 2, 1)), True
+    return X, False
+
+
 def _load_mat(path):
     """
     Returns (X_test, Y_test, range_axis, ang_axis, n_ant).
-    X_test shape = (N, 512, 256), labels are 0-indexed.
-    Range/angle axes may be None if the file didn't store them.
+    X_test is canonicalised to shape (N, 512, 256); labels are 0-indexed.
+    Range/angle axes are reordered to match X's orientation.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(path)
@@ -137,6 +167,18 @@ def _load_mat(path):
     if n_ant is None:
         m = re.search(r'N(\d+)', os.path.basename(path))
         n_ant = int(m.group(1)) if m else -1
+
+    shape_before = X.shape
+    X, transposed = _canonicalise_X(X)
+    if transposed:
+        print(f'  NOTE: X_test was shape {shape_before}; transposed to '
+              f'{X.shape} to match the model (range × angle).')
+        # Keep axis ↔ dim correspondence after transpose: range on dim 1
+        # (size 512), angle on dim 2 (size 256). Swap the saved axes if
+        # they came back tagged to the pre-transpose orientation.
+        if (range_axis is not None and ang_axis is not None
+                and len(range_axis) != NFFT_R and len(ang_axis) != NFFT_A):
+            range_axis, ang_axis = ang_axis, range_axis
 
     return X, Y, range_axis, ang_axis, n_ant
 
@@ -188,9 +230,23 @@ def _render_panel(ax, hm, range_axis=None, ang_axis=None,
                   vmin=-40, vmax=0, title=None, mark_peak=False):
     """Render one RA heatmap panel in dB."""
     db = 20 * np.log10(hm + 1e-6)
-    if range_axis is not None and ang_axis is not None and np.all(np.isfinite(ang_axis)):
-        extent = [np.nanmin(ang_axis), np.nanmax(ang_axis),
-                  np.nanmin(range_axis), np.nanmax(range_axis)]
+    H, W = db.shape
+
+    # Only use the saved axis vectors when their lengths line up with
+    # the heatmap — otherwise fall back to bin indices so a stale or
+    # mismatched axis never crashes rendering.
+    axes_ok = (
+        range_axis is not None
+        and ang_axis is not None
+        and len(range_axis) == H
+        and len(ang_axis) == W
+        and np.all(np.isfinite(ang_axis))
+        and np.all(np.isfinite(range_axis))
+    )
+
+    if axes_ok:
+        extent = [float(np.nanmin(ang_axis)), float(np.nanmax(ang_axis)),
+                  float(np.nanmin(range_axis)), float(np.nanmax(range_axis))]
         im = ax.imshow(db, cmap='jet', aspect='auto',
                        origin='lower', extent=extent,
                        vmin=vmin, vmax=vmax)
@@ -204,8 +260,7 @@ def _render_panel(ax, hm, range_axis=None, ang_axis=None,
 
     if mark_peak:
         r, c = np.unravel_index(np.argmax(db), db.shape)
-        # Convert back to axis units if we have them
-        if range_axis is not None and ang_axis is not None:
+        if axes_ok:
             ax.plot(ang_axis[c], range_axis[r], 'wx', ms=8, mew=2)
         else:
             ax.plot(c, r, 'wx', ms=8, mew=2)
@@ -566,6 +621,22 @@ def main(argv=None):
     preds, probs = _predict_batch(model, X, device)
     acc = (preds == Y).mean()
     print(f'  Test accuracy (recomputed): {acc*100:.2f}%')
+
+    # If the recomputed accuracy is near chance, something upstream is
+    # wrong (shape mismatch, wrong .mat paired with wrong .pt, labels
+    # re-indexed differently). Flag it loudly so the user doesn't stare
+    # at figures that are effectively random.
+    ckpt_acc = float(ckpt.get('test_accuracy', 0))
+    chance   = 1.0 / N_CLASSES
+    if acc < 1.5 * chance:
+        print('  WARNING: recomputed accuracy is near chance. Likely causes:')
+        print('           - this .mat file is not the one the model was trained on')
+        print('           - the shape is transposed and not being auto-corrected')
+        print('           - class-label encoding differs from training (check Y unique values)')
+    elif ckpt_acc > 0 and acc < 0.7 * ckpt_acc:
+        print(f'  WARNING: recomputed accuracy ({acc*100:.1f}%) is well below the '
+              f'checkpoint accuracy ({ckpt_acc*100:.1f}%). Worth double-checking '
+              'that the .mat and .pt were produced from the same run.')
 
     class_idx = _resolve_shape(args.shape)
     print(f'Focus class  : {CLASS_NAMES[class_idx]}')

@@ -1,4 +1,4 @@
-TR    = stlread('circle_400mm.stl');
+TR    = stlread('circle_8.stl');
 verts = TR.Points / 1000;   % now in metres: 0.40 × 0.40 × 0.005
 
 % Verify dimensions

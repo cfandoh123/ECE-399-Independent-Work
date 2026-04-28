@@ -187,31 +187,22 @@ easy, but its 3-corner signature *is* a subset of Rectangle's
 one of the 36 orientations genuinely produces a distinct heatmap:
 the long side can be along the boresight, perpendicular, or at any
 angle in between. So the model has to learn *orientation-dependent*
-features to classify Rectangle. Worse, a Rectangle seen
-end-on is geometrically very similar to Triangle or Oval: only two
-corners are clearly visible, the "long side" scatterers collapse to a
-line. `confusion_N32.png` makes this concrete: 31.8 % of rectangles
-are classified as triangles. At low N_ant this collapse is averaged
-out by the coarse angular resolution; at high N_ant the model can
-"see" the individual corners and flips its vote.
+features to classify Rectangle. `confusion_N32.png` makes this
+concrete: 31.8 % of rectangles are classified as triangles. At low
+N_ant this is averaged out by the coarse angular resolution; at high
+N_ant the model can "see" the individual corners and flips its vote.
 
-The hypothesis to verify with the inspection script is:
-
-> *Rectangles get misclassified exactly when their long axis is
-> aligned with the line of sight (orientations near 0° and 180°).*
-
-You can check this by running
-
-```bash
-python src/python/ui/inspect_heatmaps.py \
-    --mat results/radar_shapes_N32.mat \
-    --model results/radar_shape_model_N32.pt \
-    --shape Rectangle --only-errors --n-examples 8
-```
-
-and scanning the heatmaps for the orientation where the two long-side
-scatterer rows collapse to a near-horizontal strip, which will look
-triangle-ish.
+The *particular* failure mode is not what I first guessed. My
+original hypothesis was "rectangles get misclassified when the long
+axis is end-on (0° / 180°)" — the intuition being that the rectangle
+collapses to a two-point signature that looks like a triangle. After
+rendering the errors I saw the opposite is true: the hard cases at
+N=16 are **broadside** rectangles, where the long side is
+perpendicular to the line of sight and shows up as a long horizontal
+band of corner + edge scatterers. These broadside bands get confused
+with Oval at close range (the band looks like an elongated lobe) and
+with Square at far range (the band compresses to what reads as a
+4-corner blob). See §7 for the figures that pinned this down.
 
 ---
 
@@ -268,20 +259,29 @@ with no architectural help.
 
 ### 4.4 Sanity-check it visually
 
-Pick any misclassified Rectangle at N=32 and feed the same
-(orientation, size, range) through every antenna count:
+The `--compare-n` view of the script renders the *same* test sample
+through every antenna count's model. Rendering a single Triangle at
+the same (orientation, size, range) across N ∈ {4, 8, 10, 12, 16, 32}
+is the cleanest demonstration of the mechanism:
 
 ```bash
-python src/python/ui/inspect_heatmaps.py \
-    --compare-n --mat-dir . --model-dir results \
-    --shape Rectangle --only-errors --rank 0
+python src/python/ui/inspect_heatmaps.py --compare-n \
+    --mat-dir . --model-dir results \
+    --shape Triangle --sample 519
 ```
 
-You should see the heatmap transition from a blurry oblong at N=4 to
-a set of discrete bright dots at N=32, with the predicted class
-flipping from Rectangle to Triangle around N≥12. That plot is the
-smoking gun for the "feature manifold grew faster than the training
-set" story.
+In that figure the triangle's angular footprint shrinks monotonically
+from a broad lobe at N=4 (spanning ~25° at half-max) to a few bright
+pixels at N=32. The prediction is still correct at every N but the
+confidence drops visibly — you can watch the feature manifold grow
+faster than the model's fixed-size kernels can follow. That is the
+smoking gun for the "more antennas → harder classification problem"
+story.
+
+Repeating the same exercise on an *erroring* Rectangle
+(`--shape Rectangle --only-errors --rank 0`) shows the same footprint
+shrinkage plus the moment when the predicted label flips — useful
+for checking specific error modes case-by-case.
 
 ---
 
@@ -411,3 +411,113 @@ The script assumes the `.mat` files live alongside the `.pt` files.
 If you kept them where the run produced them (i.e. at the repo root,
 not under `results/`), substitute the path. Use `--help` for the full
 option list.
+
+---
+
+## 7. Hypothesis verification from the inspection figures
+
+After the write-up above was drafted I ran the inspection script on
+three scenes and checked each of my claims against the actual
+heatmaps. This section records what survived, what didn't, and what
+turned out to be new.
+
+### 7.1 Verified
+
+**Angular footprint shrinks with N_ant.** The Triangle `--compare-n`
+panel (sample 519) shows a clean monotonic collapse from a broad
+angular lobe at N=4 to a handful of bright pixels at N=32. This is
+exactly the geometry §4.1 predicted: at N=4 many orientations alias
+onto the same blurry blob, at N=32 each orientation has its own
+pointy signature. The model predicts correctly at every N in this
+example, which is the best-case outcome and still shows the
+confidence dropping visibly as N grows.
+
+**Confidence decreases with N_ant even when the answer is right.**
+In the same compare-n panel the softmax margin for the correct class
+is highest at N=4 and lowest at N=32. This is consistent with the
+"the class-conditional distribution got harder to separate" reading
+of §4.1 rather than an optimisation accident.
+
+**Triangle ↔ Rectangle confusion is a high-N_ant phenomenon.** The
+Rectangle correct-vs-wrong montage at N=4 shows no Rectangle →
+Triangle errors at all — the two errors in the panel are both
+Rectangle → Square. The Triangle ↔ Rectangle cross-confusion that
+dominates `confusion_N32.png` is genuinely produced by the
+higher-resolution regime, not a baseline property of the dataset.
+
+### 7.2 Falsified
+
+**"End-on" Rectangle hypothesis.** I claimed rectangles would fail
+when the long axis is aligned with the line of sight (0° / 180°)
+because they would collapse to a two-point return that looks like a
+triangle. The N=16 errors panel shows the opposite: the hard cases
+are all *broadside* — the long side is roughly perpendicular to the
+boresight and shows up as a long horizontal band of scatterers. The
+N=4 correct Rectangles in the same montage are the end-on cases that
+I predicted would fail; the model gets those right because the
+broad-angle-resolution cell smears the two tip returns into a wide
+lobe that the CNN recognises as Rectangle-shaped.
+
+The underlying mistake in my original reasoning was mixing up two
+different "collapses": the *physical* collapse where a long axis
+aligned with LOS reduces angular extent, and the *array-imaging*
+collapse where low angular resolution blurs everything. At low
+N_ant the array blurs all rectangles into a recognisable generic
+rectangle-lobe regardless of orientation — so end-on is *easy*, not
+hard. At high N_ant the blurring stops, and the confusion is driven
+by which specific orientations happen to produce scatterer patterns
+that match another class's template.
+
+**"Rectangle → Triangle at N=16" was overstated.** The N=16 errors
+panel shows Rectangle → {Oval, Square} as the dominant confusions,
+not Rectangle → Triangle. The triangle confusion really does
+dominate only at N=32, as the `confusion_N32.png` matrix said.
+The write-up now reflects that.
+
+### 7.3 New findings from the figures
+
+**Rectangle errors are range-stratified at N=16.** Broadside
+rectangles at close range (strong, vertically-narrow bright bands)
+get classified as Oval — the band looks like an elongated curvy
+return. Broadside rectangles at far range (the band is wider in
+angle because 114.6/N scales with range only indirectly via the
+slant distance, and the total footprint is smaller in pixels) get
+classified as Square — the wider band reads as a 4-corner blob. This
+is a cleaner story than the single "triangle confusion" line I had
+in §1.3, and suggests that a range-aware feature (or simply more
+data at close range) might recover some of the lost accuracy.
+
+**Triangle errors at high N are sparse-outline failures.** The
+compare-n figure shows the triangle at N=32 as three near-isolated
+bright points. When one of those points dims (because the facet
+angle is unfavourable for backscatter) the remaining two look like
+a rectangle's end-on signature — which explains the symmetric
+Triangle → Rectangle flow in `confusion_N32.png`. So Triangle-at-high-N
+*does* exhibit the "end-on" collapse I originally ascribed to
+Rectangle, just for the opposite class.
+
+**N=4 has real structure the eye can't see.** Some of the N=4 errors
+in the Rectangle montage look identical to correct predictions at
+glance. The CNN is picking up on amplitude and sidelobe cues that
+are invisible in a `20*log10(RA)` render. That is *good* for the
+model (it is using more than outline) and *bad* for any hand-crafted
+feature alternative that would be limited to visible structure —
+worth remembering when §2's "alternatives" list is revisited.
+
+### 7.4 What the figures imply for the next experiments
+
+- The leave-one-orientation-out test from §5.3(b) should explicitly
+  hold out the broadside band (80°–100° and 260°–280°). If test
+  accuracy for Rectangle drops much more than the other classes,
+  that confirms the broadside-is-hard story rather than a generic
+  memorisation-of-poses story.
+- The cross-N test in §5.3(c) should report per-class accuracy, not
+  just overall, because the N=4 model's Rectangle behaviour is the
+  interesting degree of freedom. Expect the N=4 → N=32 off-diagonal
+  to be near chance for Rectangle and close to the diagonal for
+  Circle.
+- The STL demo in §5.3(a) should prioritise getting a *rectangle*
+  STL rendered and tested. Every STL heatmap currently in
+  `data/heatmaps/` is Circle/Square/Triangle — the three easy
+  classes — so the existing files cannot measure the class that
+  actually drives the accuracy curve.
