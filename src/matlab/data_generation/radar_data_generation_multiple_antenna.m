@@ -1,6 +1,6 @@
 %% =========================================================
 %  radar_data_generation_multiple_antenna.m
-%  FINALIZED Radar Shape Classification Dataset Generator
+%   Radar Shape Classification Dataset Generator
 %  (Includes Sim-to-Real Domain Randomization, Jitter per Sample,
 %   Reproducibility, and Per-Sample AGC Normalization)
 %% =========================================================
@@ -220,7 +220,7 @@ for ant_exp = 1:length(antenna_counts)
     fprintf('========================================\n');
 
     snr_levels      = [5, 10, 20, 30];  
-    orientations_ds = 0 : 10 : 350;     % Reverted to 10-degree steps for diversity
+    orientations_ds = 0 : 10 : 350;     % 10-degree steps for diversity
     ranges_ds       = [2.0, 3.0, 4.0, 5.0];   
     lateral_ds      = [-0.5, 0.0, 0.5]; 
 
@@ -236,7 +236,7 @@ for ant_exp = 1:length(antenna_counts)
     sample_idx = 0;
     config_idx = 0;
     
-    rng(42); % Fix reproducibility across generation runs
+    rng(42); % reproducibility across generation runs
     tic;
 
     for shape_i = 1:N_classes
