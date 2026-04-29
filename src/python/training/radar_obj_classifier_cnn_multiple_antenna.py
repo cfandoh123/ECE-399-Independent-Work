@@ -133,7 +133,7 @@ def load_tensors(filepath):
                 # h5py transposes MATLAB arrays: shape is (cols, rows, ...)
                 # For 2-D data stored as (range, angle, N) -> transpose to (N, range, angle)
                 if X.ndim == 3:
-                    X = X.transpose(2, 0, 1)   # (range, angle, N) -> (N, range, angle)
+                    X = X.transpose(2, 1, 0)   # (range, angle, N) -> (N, range, angle)
                 elif X.ndim == 2:
                     X = X.T                     # (features, N) -> (N, features)
                 X = np.expand_dims(X, axis=1)   # add channel dim
@@ -978,6 +978,15 @@ def run_antenna_experiments(experiments, seeds=None):
         plot_history_multi(seed_histories, n_ant, seeds)
         plot_confusion_from_preds(best_preds, best_labels, n_ant,
                                    best_acc, best_seed)
+        
+        # Inside the experiment loop, after save_model() is called
+        import shutil, glob
+        DRIVE_FOLDER = '/content/drive/MyDrive/IW'
+        os.makedirs(DRIVE_FOLDER, exist_ok=True)
+        for pattern in ['*.pt', '*.png', '*.csv']:
+            for f in glob.glob(f'/content/{pattern}'):
+                shutil.copy2(f, os.path.join(DRIVE_FOLDER, os.path.basename(f)))
+        print(f"  Files synced to Drive.")
 
         results.append({
             'n_ant'          : n_ant,
@@ -1148,18 +1157,19 @@ def run_single(filepath, seeds=None):
     best_model = res['best_model']
 
     # Demo: one sample per class using tensors reloaded from the same file
-    raw       = scipy.io.loadmat(filepath) \
-        if filepath.endswith('.mat') and not _is_hdf5_mat(filepath) \
-        else None
-
-    if raw is not None:
+    if not _is_hdf5_mat(filepath):
+        raw       = scipy.io.loadmat(filepath)
         X_test_np = raw['X_test'].astype(np.float32)
         Y_test_np = raw['Y_test'].flatten().astype(int) - 1
+    else:
+        with h5py.File(filepath, 'r') as f:
+            X_test_np = np.array(f['X_test'], dtype=np.float32).transpose(2, 1, 0)
+            Y_test_np = np.array(f['Y_test'], dtype=np.int64).flatten() - 1
 
-        print("\nDemo inference — one sample per class:")
-        for cls in range(N_CLASSES):
-            idx = np.where(Y_test_np == cls)[0][0]
-            predict_shape(X_test_np[idx], best_model, true_label=cls)
+    print("\nDemo inference — one sample per class:")
+    for cls in range(N_CLASSES):
+        idx = np.where(Y_test_np == cls)[0][0]
+        predict_shape(X_test_np[idx], best_model, true_label=cls)
 
     return best_model, res['mean_acc']
 
@@ -1266,9 +1276,16 @@ if __name__ == '__main__':
                   f"best seed = {best['best_seed']}: "
                   f"{best['best_accuracy']*100:.1f}%)")
 
-            raw       = scipy.io.loadmat(f'radar_shapes_N{n_best}.mat')
-            X_test_np = raw['X_test'].astype(np.float32)
-            Y_test_np = raw['Y_test'].flatten().astype(int) - 1
+            # Replace line 1269 with:
+            best_path = f'radar_shapes_N{n_best}.mat'
+            if not _is_hdf5_mat(best_path):
+                raw       = scipy.io.loadmat(best_path)
+                X_test_np = raw['X_test'].astype(np.float32)
+                Y_test_np = raw['Y_test'].flatten().astype(int) - 1
+            else:
+                with h5py.File(best_path, 'r') as f:
+                    X_test_np = np.array(f['X_test'], dtype=np.float32).transpose(2, 1, 0)
+                    Y_test_np = np.array(f['Y_test'], dtype=np.int64).flatten() - 1
 
             print(f"\nDemo inference on best model (N={n_best}):")
             for cls in range(N_CLASSES):

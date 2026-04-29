@@ -20,8 +20,8 @@ clear; clc; close all;
 %  SECTION 1: SETTINGS — change these for each shape
 %% =========================================================
 
-STL_FILE        = 'circle_10.stl';   % your exported STL file
-TRUE_SHAPE      = 'circle';             % for labelling only
+STL_FILE        = 'square.stl';   % your exported STL file
+TRUE_SHAPE      = 'square';             % for labelling only
 OBJ_RANGE       = 4.0;                  % metres from radar
 OBJ_ORIENTATION = 0;                    % degrees rotation
 MIN_SPACING     = 0.065;                 % min 2cm between scatterers
