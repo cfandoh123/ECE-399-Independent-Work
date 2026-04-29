@@ -41,45 +41,6 @@ independently for each.
 
 ---
 
-## Repository layout
-
-```
-IW/
-├── README.md                       This file
-│
-├── src/
-│   ├── matlab/
-│   │   ├── data_generation/        Synthetic dataset generators
-│   │   │   ├── radar_data_generation_single_antenna.m
-│   │   │   └── radar_data_generation_multiple_antenna.m
-│   │   ├── inference/              STL → heatmap for real objects
-│   │   │   ├── generate_RA.m            helper used by radar_stl_to_heatmap
-│   │   │   ├── radar_stl_to_heatmap.m
-│   │   │   └── verify_dim_stl.m         sanity-check STL dimensions
-│   │   └── exploration/            Early learning / DSP fundamentals
-│   │       └── radar_simulation_basics.m
-│   └── python/
-│       ├── training/               PyTorch CNN trainers
-│       │   ├── radar_obj_classifier_cnn_single_antenna.py
-│       │   └── radar_obj_classifier_cnn_multiple_antenna.py
-│       └── ui/
-│           └── streamlit_radar.py       interactive DSP demo
-│
-├── data/
-│   ├── stl/                        STL test objects (400 mm family)
-│   └── heatmaps/                   .mat heatmaps generated from those STLs
-│
-├── results/
-    └── N4/                         first training run (N_ant = 4)
-        ├── first_training_stats.txt
-        └── history.png
-
-```
-
-
-
----
-
 ## Usage
 
 ### 1. Generate synthetic training data (MATLAB)
