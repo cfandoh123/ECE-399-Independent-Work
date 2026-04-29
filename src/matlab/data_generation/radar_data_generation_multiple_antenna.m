@@ -32,7 +32,7 @@ fprintf('Max range  : %.2f m\n',  d_max);
 fprintf('============================\n\n');
 
 %% =========================================================
-%  SECTION 2: SHAPE DEFINITIONS (Fixed Scoping & Density)
+%  SECTION 2: SHAPE DEFINITIONS
 %  Base amplitudes only. Jitter is applied per-sample later.
 %% =========================================================
 
