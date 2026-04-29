@@ -8,7 +8,6 @@
  Input  : Range-Angle heatmap [512 × 256]
  Output : Shape class (0-4)
 
- New in this version:
    Trains one ShapeCNN per antenna dataset file
    (radar_shapes_N4.mat, N8.mat, N16.mat, N32.mat)
    Then plots accuracy vs antenna count comparison.
