@@ -1,4 +1,4 @@
-# Independent Work — Radar Object Detection + ML Classification
+# Junior Independent Work — FMCW Radar Object Classification Via CNN
 
 A pipeline for classifying the **shape** of an object from its FMCW radar
 Range-Angle heatmap. Training data is synthetic and generated in MATLAB;
@@ -70,19 +70,13 @@ IW/
 │   └── heatmaps/                   .mat heatmaps generated from those STLs
 │
 ├── results/
-│   └── N4/                         first training run (N_ant = 4)
-│       ├── first_training_stats.txt
-│       └── history.png
-│
-└── Archive/                        Prior iterations — kept for reference
-    ├── matlab/                     older .m and .mlx files
-    ├── python/                     older .py files
-    └── docs/                       old READMEs, LICENSE
+    └── N4/                         first training run (N_ant = 4)
+        ├── first_training_stats.txt
+        └── history.png
+
 ```
 
-See `Archive/` for earlier approaches (1-D CNN / SVM baseline,
-multi-task CNN with shape+size+aspect+symmetry+material heads, CFAR-style
-FMCW target detection, Radar Toolbox–based generator).
+
 
 ---
 
@@ -129,7 +123,7 @@ Dependencies: `torch scipy h5py numpy matplotlib seaborn scikit-learn`.
 3. Run the script to produce a `.mat` heatmap (save into `data/heatmaps/`).
 4. Run the trained CNN on the heatmap.
 
-### 4. Interactive DSP demo (optional)
+### 4. Interactive DSP demo 
 
 ```bash
 streamlit run src/python/ui/streamlit_radar.py
